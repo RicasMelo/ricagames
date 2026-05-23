@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>World Lobby</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <main class="card lobby-card">
+    <div class="topbar">
+      <div>
+        <p class="eyebrow">Logged in as</p>
+        <h1 id="playerName">Player</h1>
+      </div>
+      <button id="logoutBtn" class="icon-like" title="Log out">Exit</button>
+    </div>
+
+    <section id="choicePanel">
+      <h2>World Lobby</h2>
+      <div class="mode-grid">
+        <button id="showCreateBtn" type="button">Create World</button>
+        <button id="showJoinBtn" type="button" class="secondary">Join World</button>
+      </div>
+      <p id="lobbyMessage"></p>
+    </section>
+
+    <section id="createPanel" class="create-world hidden">
+      <h2>Create World</h2>
+      <input id="worldInput" type="text" placeholder="World name" autocomplete="off" />
+      <input id="worldPassword" type="password" placeholder="World password" autocomplete="off" />
+      <div class="button-row">
+        <button id="createWorldBtn" type="button">Create World</button>
+        <button id="backFromCreateBtn" type="button" class="secondary">Back</button>
+      </div>
+    </section>
+
+    <section id="joinPanel" class="hidden">
+      <h2>Join World</h2>
+      <div id="worldList" class="world-list"></div>
+      <p id="emptyMessage" class="muted hidden">No worlds yet.</p>
+      <button id="backFromJoinBtn" type="button" class="secondary">Back</button>
+    </section>
+  </main>
+
+  <div id="passwordDialog" class="modal-backdrop hidden">
+    <section class="modal-card">
+      <h2 id="dialogTitle">World Password</h2>
+      <input id="joinPassword" type="password" placeholder="World password" autocomplete="off" />
+      <p id="dialogMessage"></p>
+      <div class="button-row">
+        <button id="confirmJoinBtn" type="button">Join</button>
+        <button id="cancelJoinBtn" type="button" class="secondary">Cancel</button>
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      set,
+      get,
+      update,
+      onValue,
+      serverTimestamp,
+    } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+    const GAME_NAME = "Game1";
+    const WORLD_PAGE = "world.html";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB6bbntbA1neFXQQgntP-rJUJK_bevSw2g",
+      authDomain: "ricagames.firebaseapp.com",
+      databaseURL: "https://ricagames-default-rtdb.firebaseio.com",
+      projectId: "ricagames",
+      storageBucket: "ricagames.firebasestorage.app",
+      messagingSenderId: "892798133679",
+      appId: "1:892798133679:web:164320be2bc582a3153b5a",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const nickname = localStorage.getItem("username");
+    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+    const playerName = document.getElementById("playerName");
+    const lobbyMessage = document.getElementById("lobbyMessage");
+    const choicePanel = document.getElementById("choicePanel");
+    const createPanel = document.getElementById("createPanel");
+    const joinPanel = document.getElementById("joinPanel");
+    const showCreateBtn = document.getElementById("showCreateBtn");
+    const showJoinBtn = document.getElementById("showJoinBtn");
+    const backFromCreateBtn = document.getElementById("backFromCreateBtn");
+    const backFromJoinBtn = document.getElementById("backFromJoinBtn");
+    const worldList = document.getElementById("worldList");
+    const emptyMessage = document.getElementById("emptyMessage");
+    const worldInput = document.getElementById("worldInput");
+    const worldPassword = document.getElementById("worldPassword");
+    const createWorldBtn = document.getElementById("createWorldBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const passwordDialog = document.getElementById("passwordDialog");
+    const dialogTitle = document.getElementById("dialogTitle");
+    const joinPassword = document.getElementById("joinPassword");
+    const dialogMessage = document.getElementById("dialogMessage");
+    const confirmJoinBtn = document.getElementById("confirmJoinBtn");
+    const cancelJoinBtn = document.getElementById("cancelJoinBtn");
+
+    let selectedWorldId = "";
+
+    if (!nickname || !isLoggedIn) {
+      window.location.href = "home.html";
+    } else {
+      playerName.textContent = nickname;
+      const canUseLobby = await guardCharacter();
+
+      if (canUseLobby) {
+        setupLobby();
+      }
+    }
+
+    function setupLobby() {
+      showCreateBtn.addEventListener("click", () => showPanel(createPanel));
+      showJoinBtn.addEventListener("click", () => showPanel(joinPanel));
+      backFromCreateBtn.addEventListener("click", () => showPanel(choicePanel));
+      backFromJoinBtn.addEventListener("click", () => showPanel(choicePanel));
+      createWorldBtn.addEventListener("click", createWorld);
+      confirmJoinBtn.addEventListener("click", confirmJoinWorld);
+      cancelJoinBtn.addEventListener("click", closePasswordDialog);
+      joinPassword.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          confirmJoinWorld();
+        }
+      });
+
+      logoutBtn.addEventListener("click", () => {
+        localStorage.removeItem("isLoggedIn");
+        localStorage.removeItem("username");
+        localStorage.removeItem("gameId");
+        localStorage.removeItem("worldId");
+        window.location.href = "home.html";
+      });
+
+      onValue(ref(db, `${GAME_NAME}/Worlds`), (snapshot) => {
+        const worlds = snapshot.val() || {};
+        const entries = Object.entries(worlds);
+
+        worldList.innerHTML = "";
+        emptyMessage.classList.toggle("hidden", entries.length > 0);
+
+        entries.forEach(([worldId, world]) => {
+          const button = document.createElement("button");
+          button.className = "world-button";
+          button.type = "button";
+          button.textContent = world.name || worldId;
+          button.addEventListener("click", () => openPasswordDialog(worldId, world.name || worldId));
+          worldList.appendChild(button);
+        });
+      });
+    }
+
+    function showPanel(panel) {
+      lobbyMessage.textContent = "";
+      choicePanel.classList.add("hidden");
+      createPanel.classList.add("hidden");
+      joinPanel.classList.add("hidden");
+      panel.classList.remove("hidden");
+    }
+
+    async function createWorld() {
+      try {
+        lobbyMessage.textContent = "";
+        const worldName = cleanWorldName(worldInput.value);
+        const password = cleanWorldPassword(worldPassword.value);
+        const worldId = worldName;
+        const worldRef = ref(db, `${GAME_NAME}/Worlds/${worldId}`);
+        const snapshot = await get(worldRef);
+
+        if (snapshot.exists()) {
+          throw { code: "world-already-exists" };
+        }
+
+        await set(worldRef, {
+          name: worldName,
+          owner: nickname,
+          password,
+          createdAt: serverTimestamp(),
+          players: {
+            [nickname]: {
+              nickname,
+              joinedAt: serverTimestamp(),
+            },
+          },
+        });
+
+        await enterWorld(worldId);
+      } catch (error) {
+        showLobbyError(error, lobbyMessage);
+      }
+    }
+
+    function openPasswordDialog(worldId, worldName) {
+      selectedWorldId = worldId;
+      dialogTitle.textContent = `Join ${worldName}`;
+      dialogMessage.textContent = "";
+      joinPassword.value = "";
+      passwordDialog.classList.remove("hidden");
+      joinPassword.focus();
+    }
+
+    function closePasswordDialog() {
+      selectedWorldId = "";
+      passwordDialog.classList.add("hidden");
+    }
+
+    async function confirmJoinWorld() {
+      try {
+        dialogMessage.textContent = "";
+        const password = cleanWorldPassword(joinPassword.value);
+        const worldRef = ref(db, `${GAME_NAME}/Worlds/${selectedWorldId}`);
+        const snapshot = await get(worldRef);
+
+        if (!snapshot.exists()) {
+          throw { code: "world-not-found" };
+        }
+
+        if (snapshot.val()?.password !== password) {
+          throw { code: "wrong-world-password" };
+        }
+
+        await update(ref(db, `${GAME_NAME}/Worlds/${selectedWorldId}/players/${nickname}`), {
+          nickname,
+          joinedAt: serverTimestamp(),
+        });
+
+        await enterWorld(selectedWorldId);
+      } catch (error) {
+        showLobbyError(error, dialogMessage);
+      }
+    }
+
+    async function guardCharacter() {
+      const snapshot = await get(ref(db, `${GAME_NAME}/Players/${nickname}`));
+      const player = snapshot.val();
+
+      if (!snapshot.exists()) {
+        localStorage.removeItem("isLoggedIn");
+        localStorage.removeItem("username");
+        window.location.href = "home.html";
+        return false;
+      }
+
+      if (!player?.character?.name) {
+        window.location.href = "character.html";
+        return false;
+      }
+
+      return true;
+    }
+
+    async function enterWorld(worldId) {
+      await update(ref(db, `${GAME_NAME}/Players/${nickname}`), {
+        currentWorld: worldId,
+        lastWorldJoin: serverTimestamp(),
+      });
+
+      localStorage.setItem("worldId", worldId);
+      window.location.href = WORLD_PAGE;
+    }
+
+    function cleanWorldName(value) {
+      const worldName = value.trim();
+
+      if (!worldName) {
+        throw { code: "missing-world" };
+      }
+
+      if (!/^[a-zA-Z0-9_-]{3,24}$/.test(worldName)) {
+        throw { code: "invalid-world" };
+      }
+
+      return worldName;
+    }
+
+    function cleanWorldPassword(value) {
+      if (!value) {
+        throw { code: "missing-world-password" };
+      }
+
+      if (value.length < 3) {
+        throw { code: "weak-world-password" };
+      }
+
+      return value;
+    }
+
+    function showLobbyError(error, target) {
+      console.error("Lobby error:", error);
+
+      switch (error?.code) {
+        case "missing-world":
+          target.textContent = "World name required.";
+          break;
+        case "invalid-world":
+          target.textContent = "Use 3-24 letters, numbers, _ or -.";
+          break;
+        case "world-already-exists":
+          target.textContent = "World already exists.";
+          break;
+        case "world-not-found":
+          target.textContent = "World no longer exists.";
+          break;
+        case "missing-world-password":
+          target.textContent = "World password required.";
+          break;
+        case "weak-world-password":
+          target.textContent = "World password must be at least 3 characters.";
+          break;
+        case "wrong-world-password":
+          target.textContent = "Wrong world password.";
+          break;
+        case "PERMISSION_DENIED":
+        case "permission-denied":
+          target.textContent = "Firebase database permission denied.";
+          break;
+        default:
+          target.textContent = "Could not join world.";
+      }
+    }
+  </script>
+</body>
+
+</html>

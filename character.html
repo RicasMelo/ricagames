@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Character</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <main class="card character-card">
+    <p class="eyebrow">Character setup</p>
+    <h1>Create Hero</h1>
+    <p class="subtitle">Choose a name and class.</p>
+
+    <section>
+      <input id="characterName" type="text" placeholder="Character name" autocomplete="off" />
+      <select id="classSelect"></select>
+      <div id="classPreview" class="stats-panel"></div>
+      <button id="createCharacterBtn">Create Character</button>
+      <p id="characterMessage"></p>
+    </section>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      get,
+      update,
+      serverTimestamp,
+    } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+    const GAME_NAME = "Game1";
+    const LOBBY_PAGE = "lobby.html";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB6bbntbA1neFXQQgntP-rJUJK_bevSw2g",
+      authDomain: "ricagames.firebaseapp.com",
+      databaseURL: "https://ricagames-default-rtdb.firebaseio.com",
+      projectId: "ricagames",
+      storageBucket: "ricagames.firebasestorage.app",
+      messagingSenderId: "892798133679",
+      appId: "1:892798133679:web:164320be2bc582a3153b5a",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const nickname = localStorage.getItem("username");
+    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+    const characterName = document.getElementById("characterName");
+    const classSelect = document.getElementById("classSelect");
+    const classPreview = document.getElementById("classPreview");
+    const createCharacterBtn = document.getElementById("createCharacterBtn");
+    const characterMessage = document.getElementById("characterMessage");
+
+    let classes = {};
+
+    if (!nickname || !isLoggedIn) {
+      window.location.href = "home.html";
+    } else {
+      const canCreateCharacter = await guardExistingCharacter();
+
+      if (canCreateCharacter) {
+        try {
+          await loadClasses();
+          classSelect.addEventListener("change", renderClassPreview);
+          createCharacterBtn.addEventListener("click", createCharacter);
+        } catch (error) {
+          showCharacterError({ code: "classes-load-failed", error });
+        }
+      }
+    }
+
+    async function guardExistingCharacter() {
+      const snapshot = await get(ref(db, `${GAME_NAME}/Players/${nickname}`));
+      const player = snapshot.val();
+
+      if (!snapshot.exists()) {
+        localStorage.removeItem("isLoggedIn");
+        localStorage.removeItem("username");
+        window.location.href = "home.html";
+        return false;
+      }
+
+      if (player?.character?.name) {
+        window.location.href = LOBBY_PAGE;
+        return false;
+      }
+
+      return true;
+    }
+
+    async function loadClasses() {
+      const response = await fetch("class-stats.json");
+
+      if (!response.ok) {
+        throw new Error("Could not load class-stats.json.");
+      }
+
+      classes = await response.json();
+
+      classSelect.innerHTML = "";
+
+      Object.entries(classes).forEach(([classId, classData]) => {
+        const option = document.createElement("option");
+        option.value = classId;
+        option.textContent = classData.name;
+        classSelect.appendChild(option);
+      });
+
+      renderClassPreview();
+    }
+
+    async function createCharacter() {
+      try {
+        characterMessage.textContent = "";
+        const name = cleanCharacterName(characterName.value);
+        const classId = classSelect.value;
+        const classData = classes[classId];
+
+        if (!classData) {
+          throw { code: "missing-class" };
+        }
+
+        await update(ref(db, `${GAME_NAME}/Players/${nickname}`), {
+          character: {
+            name,
+            classId,
+            className: classData.name,
+            attackType: classData.attackType,
+            stats: classData.stats,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          },
+        });
+
+        localStorage.setItem("characterName", name);
+        window.location.href = LOBBY_PAGE;
+      } catch (error) {
+        showCharacterError(error);
+      }
+    }
+
+    function renderClassPreview() {
+      const classData = classes[classSelect.value];
+
+      if (!classData) {
+        classPreview.innerHTML = "";
+        return;
+      }
+
+      const stats = Object.entries(classData.stats)
+        .map(([stat, value]) => `<span>${labelStat(stat)}: <strong>${value}</strong></span>`)
+        .join("");
+
+      classPreview.innerHTML = `
+        <h2>${classData.name}</h2>
+        <p>Attack type: ${classData.attackType}</p>
+        <div class="stats-grid">${stats}</div>
+      `;
+    }
+
+    function cleanCharacterName(value) {
+      const name = value.trim();
+
+      if (!name) {
+        throw { code: "missing-name" };
+      }
+
+      if (!/^[a-zA-Z0-9 _-]{3,24}$/.test(name)) {
+        throw { code: "invalid-name" };
+      }
+
+      return name;
+    }
+
+    function labelStat(stat) {
+      return stat.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+    }
+
+    function showCharacterError(error) {
+      console.error("Character error:", error);
+
+      switch (error?.code) {
+        case "missing-name":
+          characterMessage.textContent = "Character name required.";
+          break;
+        case "invalid-name":
+          characterMessage.textContent = "Use 3-24 letters, numbers, spaces, _ or -.";
+          break;
+        case "missing-class":
+          characterMessage.textContent = "Choose a class.";
+          break;
+        case "classes-load-failed":
+          characterMessage.textContent = "Could not load class stats.";
+          break;
+        case "PERMISSION_DENIED":
+        case "permission-denied":
+          characterMessage.textContent = "Firebase database permission denied.";
+          break;
+        default:
+          characterMessage.textContent = "Could not create character.";
+      }
+    }
+  </script>
+</body>
+
+</html>

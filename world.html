@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>World</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <main class="card lobby-card">
+    <div class="topbar">
+      <div>
+        <p class="eyebrow">Current world</p>
+        <h1 id="worldName">World</h1>
+      </div>
+      <button id="backToLobbyBtn" class="icon-like" type="button">Lobby</button>
+    </div>
+
+    <section class="stats-panel">
+      <h2>World Context</h2>
+      <p id="worldOwner"></p>
+      <p id="playerName"></p>
+      <p id="characterName"></p>
+    </section>
+
+    <button id="startWorldBtn" type="button">Start</button>
+    <p id="worldMessage"></p>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      get,
+    } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+    const GAME_NAME = "Game1";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB6bbntbA1neFXQQgntP-rJUJK_bevSw2g",
+      authDomain: "ricagames.firebaseapp.com",
+      databaseURL: "https://ricagames-default-rtdb.firebaseio.com",
+      projectId: "ricagames",
+      storageBucket: "ricagames.firebasestorage.app",
+      messagingSenderId: "892798133679",
+      appId: "1:892798133679:web:164320be2bc582a3153b5a",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const nickname = localStorage.getItem("username");
+    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+    const worldId = localStorage.getItem("worldId");
+    const worldName = document.getElementById("worldName");
+    const worldOwner = document.getElementById("worldOwner");
+    const playerName = document.getElementById("playerName");
+    const characterName = document.getElementById("characterName");
+    const worldMessage = document.getElementById("worldMessage");
+    const backToLobbyBtn = document.getElementById("backToLobbyBtn");
+    const startWorldBtn = document.getElementById("startWorldBtn");
+
+    if (!nickname || !isLoggedIn) {
+      window.location.href = "home.html";
+    } else if (!worldId) {
+      window.location.href = "lobby.html";
+    } else {
+      await loadWorld();
+    }
+
+    backToLobbyBtn.addEventListener("click", () => {
+      window.location.href = "lobby.html";
+    });
+
+    startWorldBtn.addEventListener("click", () => {
+      window.location.href = "main-lobby.html";
+    });
+
+    async function loadWorld() {
+      const [worldSnapshot, playerSnapshot] = await Promise.all([
+        get(ref(db, `${GAME_NAME}/Worlds/${worldId}`)),
+        get(ref(db, `${GAME_NAME}/Players/${nickname}`)),
+      ]);
+
+      if (!worldSnapshot.exists()) {
+        localStorage.removeItem("worldId");
+        window.location.href = "lobby.html";
+        return;
+      }
+
+      if (!playerSnapshot.exists() || !playerSnapshot.val()?.character?.name) {
+        window.location.href = "character.html";
+        return;
+      }
+
+      const world = worldSnapshot.val();
+      const player = playerSnapshot.val();
+      worldName.textContent = world.name || worldId;
+      worldOwner.textContent = `Owner: ${world.owner || "Unknown"}`;
+      playerName.textContent = `Player: ${nickname}`;
+      characterName.textContent = `Character: ${player.character.name}`;
+      worldMessage.textContent = "";
+    }
+  </script>
+</body>
+
+</html>

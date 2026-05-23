@@ -1,0 +1,50 @@
+{
+  "warrior": {
+    "name": "Warrior",
+    "attackType": "physical",
+    "stats": {
+      "attack": 12,
+      "defense": 10,
+      "magicAttack": 2,
+      "magicDefense": 5,
+      "speed": 5,
+      "health": 120
+    }
+  },
+  "mage": {
+    "name": "Mage",
+    "attackType": "magical",
+    "stats": {
+      "attack": 3,
+      "defense": 4,
+      "magicAttack": 13,
+      "magicDefense": 10,
+      "speed": 6,
+      "health": 80
+    }
+  },
+  "rogue": {
+    "name": "Rogue",
+    "attackType": "physical",
+    "stats": {
+      "attack": 9,
+      "defense": 6,
+      "magicAttack": 4,
+      "magicDefense": 6,
+      "speed": 13,
+      "health": 95
+    }
+  },
+  "cleric": {
+    "name": "Cleric",
+    "attackType": "magical",
+    "stats": {
+      "attack": 5,
+      "defense": 8,
+      "magicAttack": 9,
+      "magicDefense": 12,
+      "speed": 5,
+      "health": 105
+    }
+  }
+}

@@ -1,0 +1,9 @@
+No required resources are currently missing.
+
+Optional future art/audio resources you can add later:
+- assets/backgrounds/main-lobby-tower.png
+- assets/backgrounds/main-lobby-clouds.png
+- assets/symbols/glowing-runes.png
+- assets/portraits/default-character.png
+- assets/events/glass-saint.png
+- assets/audio/main-lobby-ambience.mp3

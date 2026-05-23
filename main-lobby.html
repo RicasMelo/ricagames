@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Main Lobby</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="hub-body">
+  <main class="hub-shell">
+    <header class="hub-header">
+      <div>
+        <p class="eyebrow">World Hub</p>
+        <h1 id="hubWorldName">World</h1>
+      </div>
+      <button id="backToWorldBtn" type="button" class="icon-like">World</button>
+    </header>
+
+    <section class="hub-grid">
+      <aside class="hub-panel player-panel">
+        <div class="character-portrait">
+          <div class="portrait-glow"></div>
+          <div class="portrait-figure"></div>
+        </div>
+        <p class="eyebrow">Player</p>
+        <h2 id="characterName">Character</h2>
+        <p id="characterTitle">"The Wordbearer"</p>
+        <p id="characterLevel">Level 1</p>
+        <div id="relicList" class="relic-list"></div>
+        <div class="panel-actions">
+          <button type="button">Customize</button>
+          <button type="button" class="secondary">Spellbook</button>
+          <button type="button" class="secondary">Relics</button>
+        </div>
+      </aside>
+
+      <section class="tower-stage">
+        <div class="cloud cloud-a"></div>
+        <div class="cloud cloud-b"></div>
+        <div class="symbol symbol-a">*</div>
+        <div class="symbol symbol-b">&lt;&gt;</div>
+        <div class="symbol symbol-c">+</div>
+        <div class="tower-visual">
+          <div class="tower-spire"></div>
+          <div class="tower-body">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <div class="tower-base"></div>
+        </div>
+      </section>
+
+      <section class="hub-panel daily-panel">
+        <p class="eyebrow" id="dailyDate">Today</p>
+        <h2 id="dailyTitle">Today's Conditions</h2>
+        <ul id="dailyModifiers" class="modifier-list"></ul>
+      </section>
+
+      <section class="hub-panel event-panel">
+        <p class="eyebrow">World Event Active</p>
+        <h2 id="eventName">The Glass Saint</h2>
+        <div class="hp-bar">
+          <span id="eventHpBar"></span>
+        </div>
+        <p id="eventHpText">HP remaining: 42%</p>
+        <h3>Known Weaknesses</h3>
+        <ul id="weaknessList" class="modifier-list"></ul>
+        <button type="button">Join Event</button>
+      </section>
+
+      <section class="hub-panel tower-panel">
+        <p class="eyebrow">Tower</p>
+        <h2>Ascension Gate</h2>
+        <dl class="tower-stats">
+          <div>
+            <dt>Current Floor Record</dt>
+            <dd id="floorRecord">143</dd>
+          </div>
+          <div>
+            <dt>Your Best</dt>
+            <dd id="playerBest">0</dd>
+          </div>
+          <div>
+            <dt>Ascension Level</dt>
+            <dd id="ascensionLevel">1</dd>
+          </div>
+        </dl>
+        <div class="panel-actions">
+          <button type="button">Enter Tower</button>
+          <button type="button" class="secondary">Quick Run</button>
+          <button type="button" class="secondary">Ascension</button>
+        </div>
+      </section>
+    </section>
+
+    <p id="hubMessage"></p>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      get,
+      update,
+      serverTimestamp,
+    } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+    const GAME_NAME = "Game1";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB6bbntbA1neFXQQgntP-rJUJK_bevSw2g",
+      authDomain: "ricagames.firebaseapp.com",
+      databaseURL: "https://ricagames-default-rtdb.firebaseio.com",
+      projectId: "ricagames",
+      storageBucket: "ricagames.firebasestorage.app",
+      messagingSenderId: "892798133679",
+      appId: "1:892798133679:web:164320be2bc582a3153b5a",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const nickname = localStorage.getItem("username");
+    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+    const worldId = localStorage.getItem("worldId");
+    const hubMessage = document.getElementById("hubMessage");
+
+    if (!nickname || !isLoggedIn) {
+      window.location.href = "home.html";
+    } else if (!worldId) {
+      window.location.href = "lobby.html";
+    } else {
+      await loadMainLobby();
+    }
+
+    document.getElementById("backToWorldBtn").addEventListener("click", () => {
+      window.location.href = "world.html";
+    });
+
+    async function loadMainLobby() {
+      try {
+        const [playerSnapshot, worldSnapshot] = await Promise.all([
+          get(ref(db, `${GAME_NAME}/Players/${nickname}`)),
+          get(ref(db, `${GAME_NAME}/Worlds/${worldId}`)),
+        ]);
+
+        if (!playerSnapshot.exists()) {
+          localStorage.removeItem("isLoggedIn");
+          localStorage.removeItem("username");
+          window.location.href = "home.html";
+          return;
+        }
+
+        if (!worldSnapshot.exists()) {
+          localStorage.removeItem("worldId");
+          window.location.href = "lobby.html";
+          return;
+        }
+
+        const player = playerSnapshot.val();
+        const world = worldSnapshot.val();
+
+        if (!player.character?.name) {
+          window.location.href = "character.html";
+          return;
+        }
+
+        renderPlayer(player);
+        renderWorld(world);
+        renderDailyStatus(new Date());
+        renderWorldEvent(world);
+        renderTower(player, world);
+
+        await update(ref(db, `${GAME_NAME}/Players/${nickname}`), {
+          lastHubVisit: serverTimestamp(),
+        });
+      } catch (error) {
+        console.error("Main lobby error:", error);
+        hubMessage.textContent = "Could not load main lobby.";
+      }
+    }
+
+    function renderPlayer(player) {
+      const character = player.character;
+      document.getElementById("characterName").textContent = character.name;
+      document.getElementById("characterTitle").textContent = character.title || "\"The Wordbearer\"";
+      document.getElementById("characterLevel").textContent = `Level ${character.level || player.level || 1}`;
+
+      const relics = character.relics || ["Empty Relic Slot", "Empty Relic Slot", "Empty Relic Slot"];
+      document.getElementById("relicList").innerHTML = relics
+        .map((relic) => `<span>${relic}</span>`)
+        .join("");
+    }
+
+    function renderWorld(world) {
+      document.getElementById("hubWorldName").textContent = world.name || worldId;
+    }
+
+    function renderDailyStatus(date) {
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const weekday = date.getDay();
+      const dateKey = Number(`${month}${String(day).padStart(2, "0")}`);
+      const dailyDate = document.getElementById("dailyDate");
+      const dailyTitle = document.getElementById("dailyTitle");
+      const modifiers = document.getElementById("dailyModifiers");
+
+      dailyDate.textContent = date.toLocaleDateString(undefined, {
+        weekday: "long",
+        month: "short",
+        day: "numeric",
+      });
+
+      let title = "Today's Conditions";
+      let list = [
+        "+ Fire words deal 10% more damage",
+        "+ Words with double letters gain crit chance",
+        "- Ice effects reduced by 15%",
+        "+ Bosses have increased health",
+      ];
+
+      if (dateKey === 1031) {
+        title = "The Veil Thins";
+        list = [
+          "+ Dark words empowered",
+          "+ Corrupted enemies appear",
+          "+ Rare relic drop chance increased",
+        ];
+      } else if (dateKey === 1225) {
+        title = "The Frost Season";
+        list = [
+          "+ Ice words stronger",
+          "+ Healing effects increased",
+          "+ Winter boss active",
+        ];
+      } else if (weekday === 5 && day === 13) {
+        title = "The Cursed Day";
+        list = [
+          "+ Unknown word effects increased",
+          "+ Random mutations occur each floor",
+          "+ Boss intent is partially hidden",
+        ];
+      }
+
+      dailyTitle.textContent = title;
+      modifiers.innerHTML = list.map((modifier) => `<li>${modifier}</li>`).join("");
+    }
+
+    function renderWorldEvent(world) {
+      const event = world.event || {
+        name: "The Glass Saint",
+        hpRemaining: 42,
+        weaknesses: ["Known: 7-letter words", "Known: Fire element", "Unknown: final weakness"],
+      };
+
+      document.getElementById("eventName").textContent = event.name;
+      document.getElementById("eventHpText").textContent = `HP remaining: ${event.hpRemaining}%`;
+      document.getElementById("eventHpBar").style.width = `${event.hpRemaining}%`;
+      document.getElementById("weaknessList").innerHTML = event.weaknesses
+        .map((weakness) => `<li>${weakness}</li>`)
+        .join("");
+    }
+
+    function renderTower(player, world) {
+      const tower = world.tower || {};
+      document.getElementById("floorRecord").textContent = tower.floorRecord || 143;
+      document.getElementById("playerBest").textContent = player.towerBest || player.towerFloor || 1;
+      document.getElementById("ascensionLevel").textContent = player.ascensionLevel || 1;
+    }
+  </script>
+</body>
+
+</html>
