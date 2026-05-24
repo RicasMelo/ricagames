@@ -123,6 +123,7 @@
     }
 
     function setupLobby() {
+      // This page only selects/creates worlds. The actual hub starts from world.html.
       showCreateBtn.addEventListener("click", () => showPanel(createPanel));
       showJoinBtn.addEventListener("click", () => showPanel(joinPanel));
       backFromCreateBtn.addEventListener("click", () => showPanel(choicePanel));
@@ -243,6 +244,7 @@
     }
 
     async function guardCharacter() {
+      // Players must finish character creation before entering any world.
       const snapshot = await get(ref(db, `${GAME_NAME}/Players/${nickname}`));
       const player = snapshot.val();
 

@@ -8,7 +8,8 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
 
-const GAME_NAME = "Game1"; // Easily change this later
+// All Firebase paths live under this root. Changing it creates a separate game namespace.
+const GAME_NAME = "Game1";
 const MIN_PASSWORD_LENGTH = 3;
 const CHARACTER_PAGE = "character.html";
 const LOBBY_PAGE = "lobby.html";
@@ -122,6 +123,8 @@ document.getElementById("registerBtn").addEventListener("click", async () => {
 
 async function routeLoggedInPlayer(nickname) {
   try {
+    // Login/register only identifies the player. This decides whether they still
+    // need character creation or can continue to the world lobby.
     const snapshot = await get(ref(db, `${GAME_NAME}/Players/${nickname}`));
     const player = snapshot.val();
 
@@ -172,6 +175,7 @@ function cleanPassword(value) {
 }
 
 function rememberPlayer(nickname) {
+  // These localStorage values are the lightweight session used by every page.
   localStorage.setItem("isLoggedIn", "true");
   localStorage.setItem("username", nickname);
   localStorage.setItem("gameId", GAME_NAME);

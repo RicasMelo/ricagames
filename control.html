@@ -98,6 +98,7 @@
 
     clearBtn.addEventListener("click", async () => {
 
+      // Development-only escape hatch. This deletes the entire Firebase database.
       const confirmed = confirm(
         "This will COMPLETELY delete the realtime database. Continue?"
       );

@@ -1,0 +1,31 @@
+{
+  "_documentation": {
+    "purpose": "Positive daily modifiers used by main-lobby.html.",
+    "selection_rule": "The current date picks up to 2 good conditions per day.",
+    "id_rule": "Top-level IDs must be stable because they are used for deterministic daily selection."
+  },
+  "fire_words_empowered": {
+    "name": "Kindled Vocabulary",
+    "description": "Fire words deal 10% more damage."
+  },
+  "double_letter_crit": {
+    "name": "Echoed Letters",
+    "description": "Words with double letters gain critical chance."
+  },
+  "rare_relic_luck": {
+    "name": "Relic Drift",
+    "description": "Rare relic drop chance is increased."
+  },
+  "healing_boost": {
+    "name": "Soft Light",
+    "description": "Healing effects are increased."
+  },
+  "long_word_bonus": {
+    "name": "Tower Lexicon",
+    "description": "Words with 7 or more letters gain bonus damage."
+  },
+  "first_turn_focus": {
+    "name": "Clear Intent",
+    "description": "Your first attack each floor has increased accuracy."
+  }
+}

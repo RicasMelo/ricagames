@@ -1,4 +1,9 @@
 {
+  "_documentation": {
+    "purpose": "Playable class catalog used by character.html during character creation.",
+    "id_rule": "Top-level class IDs are saved as character.classId and should match future sprite folders.",
+    "stat_rule": "Stats are copied into the player record when the character is created."
+  },
   "warrior": {
     "name": "Warrior",
     "attackType": "physical",

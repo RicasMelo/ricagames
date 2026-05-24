@@ -80,6 +80,8 @@
     });
 
     async function loadWorld() {
+      // This lightweight page confirms the selected world and player context
+      // before handing off to the richer main lobby.
       const [worldSnapshot, playerSnapshot] = await Promise.all([
         get(ref(db, `${GAME_NAME}/Worlds/${worldId}`)),
         get(ref(db, `${GAME_NAME}/Players/${nickname}`)),

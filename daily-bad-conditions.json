@@ -1,0 +1,31 @@
+{
+  "_documentation": {
+    "purpose": "Negative daily modifiers used by main-lobby.html.",
+    "selection_rule": "The current date picks up to 2 bad conditions per day.",
+    "id_rule": "Top-level IDs must be stable because they are used for deterministic daily selection."
+  },
+  "ice_words_weakened": {
+    "name": "Thawing Glyphs",
+    "description": "Ice effects are reduced by 15%."
+  },
+  "boss_health_increase": {
+    "name": "Fortified Bosses",
+    "description": "Bosses have increased health."
+  },
+  "hidden_intent": {
+    "name": "Clouded Intent",
+    "description": "Enemy intent is partially hidden."
+  },
+  "mutation_floor": {
+    "name": "Unstable Floors",
+    "description": "A random mutation can occur each floor."
+  },
+  "short_word_tax": {
+    "name": "Hungry Stone",
+    "description": "Words with 3 or fewer letters deal reduced damage."
+  },
+  "curse_echo": {
+    "name": "Cursed Echo",
+    "description": "Repeated words are less effective."
+  }
+}
