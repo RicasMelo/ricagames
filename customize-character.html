@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customize Character</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="hub-body">
+  <main class="customize-shell">
+    <header class="hub-header">
+      <div>
+        <p class="eyebrow">Player Loadout</p>
+        <h1>Customize Character</h1>
+      </div>
+      <button id="backToHubBtn" type="button" class="icon-like">Hub</button>
+    </header>
+
+    <nav class="top-tabs" aria-label="Customize sections">
+      <button class="tab-button active" type="button" data-tab="characterTab">Character</button>
+      <button class="tab-button" type="button" data-tab="relicsTab">Relics</button>
+      <button class="tab-button" type="button" data-tab="attackbookTab">Wordbook</button>
+    </nav>
+
+    <section id="characterTab" class="tab-panel active">
+      <div class="loadout-grid">
+        <section class="hub-panel">
+          <p class="eyebrow">Identity</p>
+          <label for="characterNameInput">Name</label>
+          <input id="characterNameInput" type="text" autocomplete="off" maxlength="24" />
+
+          <label for="titleSelect">Title</label>
+          <select id="titleSelect"></select>
+          <p id="titleDescription" class="title-description"></p>
+
+          <button id="saveCharacterBtn" type="button">Save Character</button>
+        </section>
+
+        <section class="hub-panel">
+          <p class="eyebrow">Sprite</p>
+          <div id="spritePreview" class="character-portrait sprite-preview">
+            <div class="portrait-glow"></div>
+            <div class="portrait-figure"></div>
+          </div>
+          <div id="spriteGrid" class="sprite-grid"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="relicsTab" class="tab-panel">
+      <section class="hub-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Relics</p>
+            <h2>Choose Relics</h2>
+          </div>
+          <p id="relicCount" class="muted">0 / 3 selected</p>
+        </div>
+        <div id="relicGrid" class="loadout-list"></div>
+        <button id="saveRelicsBtn" type="button">Save Relics</button>
+      </section>
+    </section>
+
+    <section id="attackbookTab" class="tab-panel">
+      <section class="hub-panel">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Saved Attacks</p>
+            <h2>Wordbook</h2>
+          </div>
+          <p class="muted">8 slots</p>
+        </div>
+        <div id="attackSlots" class="attack-slots"></div>
+        <button id="saveAttacksBtn" type="button">Save Wordbook</button>
+      </section>
+    </section>
+
+    <p id="customizeMessage"></p>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      get,
+      update,
+      serverTimestamp,
+    } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+    const GAME_NAME = "Game1";
+    const DEFAULT_TITLE_ID = "beginner";
+    const MAX_RELICS = 3;
+    const ATTACK_SLOTS = 8;
+    const STARTER_RELIC_IDS = ["ember_charm", "frost_lens"];
+    const FALLBACK_TITLE = {
+      name: "The Wordbearer",
+      description: "Given to every new hero who first steps into the tower.",
+      starter: true,
+    };
+    const SPRITES = [
+      // Temporary CSS sprite choices. Future image sprites should follow resources.txt.
+      { id: "violet", name: "Violet", className: "sprite-violet" },
+      { id: "ember", name: "Ember", className: "sprite-ember" },
+      { id: "frost", name: "Frost", className: "sprite-frost" },
+      { id: "verdant", name: "Verdant", className: "sprite-verdant" },
+    ];
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB6bbntbA1neFXQQgntP-rJUJK_bevSw2g",
+      authDomain: "ricagames.firebaseapp.com",
+      databaseURL: "https://ricagames-default-rtdb.firebaseio.com",
+      projectId: "ricagames",
+      storageBucket: "ricagames.firebasestorage.app",
+      messagingSenderId: "892798133679",
+      appId: "1:892798133679:web:164320be2bc582a3153b5a",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const nickname = localStorage.getItem("username");
+    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+    const worldId = localStorage.getItem("worldId");
+    const message = document.getElementById("customizeMessage");
+
+    let player = null;
+    let titleCatalog = {};
+    let relicCatalog = {};
+    let selectedSprite = "violet";
+    let selectedRelics = [];
+
+    if (!nickname || !isLoggedIn) {
+      window.location.href = "home.html";
+    } else if (!worldId) {
+      window.location.href = "lobby.html";
+    } else {
+      await loadCustomizePage();
+    }
+
+    document.getElementById("backToHubBtn").addEventListener("click", () => {
+      window.location.href = "main-lobby.html";
+    });
+    document.getElementById("saveCharacterBtn").addEventListener("click", saveCharacter);
+    document.getElementById("saveRelicsBtn").addEventListener("click", saveRelics);
+    document.getElementById("saveAttacksBtn").addEventListener("click", saveAttacks);
+    document.getElementById("titleSelect").addEventListener("change", renderTitleDescription);
+
+    document.querySelectorAll(".tab-button").forEach((button) => {
+      button.addEventListener("click", () => openTab(button.dataset.tab));
+    });
+
+    async function loadCustomizePage() {
+      try {
+        const [playerSnapshot, loadedTitles, loadedRelics] = await Promise.all([
+          get(ref(db, `${GAME_NAME}/Players/${nickname}`)),
+          loadJson("character-titles.json"),
+          loadJson("relics.json"),
+        ]);
+
+        if (!playerSnapshot.exists()) {
+          localStorage.removeItem("isLoggedIn");
+          localStorage.removeItem("username");
+          window.location.href = "home.html";
+          return;
+        }
+
+        player = playerSnapshot.val();
+
+        if (!player.character?.name) {
+          window.location.href = "character.html";
+          return;
+        }
+
+        titleCatalog = {
+          [DEFAULT_TITLE_ID]: FALLBACK_TITLE,
+          ...loadedTitles,
+        };
+        relicCatalog = loadedRelics;
+
+        player = await normalizePlayerLoadout(player);
+        renderCharacterTab();
+        renderRelicsTab();
+        renderAttackbookTab();
+      } catch (error) {
+        console.error("Customize error:", error);
+        message.textContent = "Could not load customization.";
+      }
+    }
+
+    async function loadJson(path) {
+      const response = await fetch(path);
+
+      if (!response.ok) {
+        throw new Error(`Could not load ${path}.`);
+      }
+
+      return response.json();
+    }
+
+    async function normalizePlayerLoadout(loadedPlayer) {
+      const character = loadedPlayer.character || {};
+      // This page doubles as a migration point. Whenever older player records are
+      // missing new loadout fields, it fills sensible defaults and saves them.
+      const unlockedTitles = Array.isArray(character.unlockedTitles)
+        ? [...new Set([DEFAULT_TITLE_ID, ...character.unlockedTitles])]
+        : [DEFAULT_TITLE_ID];
+      const selectedTitle = unlockedTitles.includes(character.selectedTitle)
+        ? character.selectedTitle
+        : DEFAULT_TITLE_ID;
+      const unlockedRelics = Array.isArray(character.unlockedRelics)
+        ? [...new Set([...STARTER_RELIC_IDS, ...character.unlockedRelics])].filter((relicId) => relicCatalog[relicId])
+        : STARTER_RELIC_IDS.filter((relicId) => relicCatalog[relicId]);
+      const equippedRelics = Array.isArray(character.equippedRelics)
+        ? character.equippedRelics.filter((relicId) => unlockedRelics.includes(relicId)).slice(0, MAX_RELICS)
+        : [];
+      const savedAttacks = normalizeAttacks(character.savedAttacks);
+      const spriteId = SPRITES.some((sprite) => sprite.id === character.spriteId) ? character.spriteId : "violet";
+      const titleText = formatTitle(titleCatalog[selectedTitle]?.name || FALLBACK_TITLE.name);
+      const updates = {};
+
+      if (!Array.isArray(character.unlockedTitles) || unlockedTitles.length !== character.unlockedTitles.length) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/unlockedTitles`] = unlockedTitles;
+      }
+
+      if (character.selectedTitle !== selectedTitle) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/selectedTitle`] = selectedTitle;
+      }
+
+      if (character.title !== titleText) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/title`] = titleText;
+      }
+
+      if (!Array.isArray(character.unlockedRelics) || unlockedRelics.length !== character.unlockedRelics.length) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/unlockedRelics`] = unlockedRelics;
+      }
+
+      if (!Array.isArray(character.equippedRelics) || equippedRelics.length !== character.equippedRelics.length) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/equippedRelics`] = equippedRelics;
+      }
+
+      if (!Array.isArray(character.savedAttacks) || savedAttacks.length !== character.savedAttacks.length) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/savedAttacks`] = savedAttacks;
+      }
+
+      if (character.spriteId !== spriteId) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/spriteId`] = spriteId;
+      }
+
+      if (Object.keys(updates).length) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/updatedAt`] = serverTimestamp();
+        await update(ref(db), updates);
+      }
+
+      selectedSprite = spriteId;
+      selectedRelics = equippedRelics;
+
+      return {
+        ...loadedPlayer,
+        character: {
+          ...character,
+          unlockedTitles,
+          selectedTitle,
+          title: titleText,
+          unlockedRelics,
+          equippedRelics,
+          savedAttacks,
+          spriteId,
+        },
+      };
+    }
+
+    function normalizeAttacks(attacks) {
+      const saved = Array.isArray(attacks) ? attacks : [];
+      return Array.from({ length: ATTACK_SLOTS }, (_, index) => cleanAttack(saved[index] || ""));
+    }
+
+    function renderCharacterTab() {
+      const character = player.character;
+      document.getElementById("characterNameInput").value = character.name;
+      renderTitleSelect(character);
+      renderSpriteGrid();
+      renderSpritePreview();
+    }
+
+    function renderTitleSelect(character) {
+      const titleSelect = document.getElementById("titleSelect");
+      titleSelect.innerHTML = "";
+
+      character.unlockedTitles.forEach((titleId) => {
+        const title = titleCatalog[titleId];
+
+        if (!title) {
+          return;
+        }
+
+        const option = document.createElement("option");
+        option.value = titleId;
+        option.textContent = title.name;
+        titleSelect.appendChild(option);
+      });
+
+      titleSelect.value = character.selectedTitle || DEFAULT_TITLE_ID;
+      renderTitleDescription();
+    }
+
+    function renderTitleDescription() {
+      const titleId = document.getElementById("titleSelect").value;
+      document.getElementById("titleDescription").textContent = titleCatalog[titleId]?.description || "";
+    }
+
+    function renderSpriteGrid() {
+      const spriteGrid = document.getElementById("spriteGrid");
+      spriteGrid.innerHTML = "";
+
+      SPRITES.forEach((sprite) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `sprite-choice ${sprite.id === selectedSprite ? "selected" : ""}`;
+        button.dataset.spriteId = sprite.id;
+
+        const figure = document.createElement("span");
+        figure.className = `mini-sprite ${sprite.className}`;
+        const name = document.createElement("span");
+        name.textContent = sprite.name;
+
+        button.append(figure, name);
+        button.addEventListener("click", () => {
+          selectedSprite = sprite.id;
+          renderSpriteGrid();
+          renderSpritePreview();
+        });
+        spriteGrid.appendChild(button);
+      });
+    }
+
+    function renderSpritePreview() {
+      const sprite = SPRITES.find((item) => item.id === selectedSprite) || SPRITES[0];
+      const preview = document.getElementById("spritePreview");
+      const figure = preview.querySelector(".portrait-figure");
+      figure.className = `portrait-figure ${sprite.className}`;
+    }
+
+    function renderRelicsTab() {
+      const relicGrid = document.getElementById("relicGrid");
+      relicGrid.innerHTML = "";
+
+      if (!player.character.unlockedRelics.length) {
+        const empty = document.createElement("p");
+        empty.className = "muted";
+        empty.textContent = "No relics unlocked yet.";
+        relicGrid.appendChild(empty);
+        updateRelicCount();
+        return;
+      }
+
+      player.character.unlockedRelics.forEach((relicId) => {
+        const relic = relicCatalog[relicId];
+
+        if (!relic) {
+          return;
+        }
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = `loadout-item ${selectedRelics.includes(relicId) ? "selected" : ""}`;
+
+        const heading = document.createElement("strong");
+        heading.textContent = relic.name;
+        const rarity = document.createElement("span");
+        rarity.textContent = relic.rarity || "Relic";
+        const effect = document.createElement("p");
+        effect.textContent = relic.effect;
+
+        button.append(heading, rarity, effect);
+        button.addEventListener("click", () => toggleRelic(relicId));
+        relicGrid.appendChild(button);
+      });
+
+      updateRelicCount();
+    }
+
+    function toggleRelic(relicId) {
+      if (selectedRelics.includes(relicId)) {
+        selectedRelics = selectedRelics.filter((selectedId) => selectedId !== relicId);
+      } else if (selectedRelics.length < MAX_RELICS) {
+        selectedRelics = [...selectedRelics, relicId];
+      } else {
+        message.textContent = `Choose up to ${MAX_RELICS} relics.`;
+      }
+
+      renderRelicsTab();
+    }
+
+    function updateRelicCount() {
+      document.getElementById("relicCount").textContent = `${selectedRelics.length} / ${MAX_RELICS} selected`;
+    }
+
+    function renderAttackbookTab() {
+      const attackSlots = document.getElementById("attackSlots");
+      attackSlots.innerHTML = "";
+
+      // Wordbook is intentionally fixed at 8 slots so battle UI can depend on it.
+      player.character.savedAttacks.forEach((attack, index) => {
+        const label = document.createElement("label");
+        label.textContent = `Slot ${index + 1}`;
+        label.htmlFor = `attackSlot${index}`;
+
+        const input = document.createElement("input");
+        input.id = `attackSlot${index}`;
+        input.type = "text";
+        input.maxLength = 24;
+        input.value = attack;
+        input.placeholder = "Saved word";
+
+        const slot = document.createElement("div");
+        slot.className = "attack-slot";
+        slot.append(label, input);
+        attackSlots.appendChild(slot);
+      });
+    }
+
+    async function saveCharacter() {
+      try {
+        message.textContent = "";
+        const name = cleanCharacterName(document.getElementById("characterNameInput").value);
+        const selectedTitle = document.getElementById("titleSelect").value;
+
+        if (!player.character.unlockedTitles.includes(selectedTitle) || !titleCatalog[selectedTitle]) {
+          throw { code: "invalid-title" };
+        }
+
+        const title = formatTitle(titleCatalog[selectedTitle].name);
+        await update(ref(db, `${GAME_NAME}/Players/${nickname}/character`), {
+          name,
+          selectedTitle,
+          title,
+          spriteId: selectedSprite,
+          updatedAt: serverTimestamp(),
+        });
+
+        player.character.name = name;
+        player.character.selectedTitle = selectedTitle;
+        player.character.title = title;
+        player.character.spriteId = selectedSprite;
+        localStorage.setItem("characterName", name);
+        message.textContent = "Character saved.";
+      } catch (error) {
+        showSaveError(error, "Could not save character.");
+      }
+    }
+
+    async function saveRelics() {
+      try {
+        message.textContent = "";
+        await update(ref(db, `${GAME_NAME}/Players/${nickname}/character`), {
+          equippedRelics: selectedRelics,
+          updatedAt: serverTimestamp(),
+        });
+
+        player.character.equippedRelics = selectedRelics;
+        message.textContent = "Relics saved.";
+      } catch (error) {
+        showSaveError(error, "Could not save relics.");
+      }
+    }
+
+    async function saveAttacks() {
+      try {
+        message.textContent = "";
+        const savedAttacks = Array.from(document.querySelectorAll(".attack-slot input"), (input) => cleanAttack(input.value));
+        await update(ref(db, `${GAME_NAME}/Players/${nickname}/character`), {
+          savedAttacks,
+          updatedAt: serverTimestamp(),
+        });
+
+        player.character.savedAttacks = savedAttacks;
+        renderAttackbookTab();
+        message.textContent = "Wordbook saved.";
+      } catch (error) {
+        showSaveError(error, "Could not save Wordbook.");
+      }
+    }
+
+    function openTab(tabId) {
+      document.querySelectorAll(".tab-button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.tab === tabId);
+      });
+      document.querySelectorAll(".tab-panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === tabId);
+      });
+      message.textContent = "";
+    }
+
+    function cleanCharacterName(value) {
+      const name = value.trim();
+
+      if (!name) {
+        throw { code: "missing-name" };
+      }
+
+      if (!/^[a-zA-Z0-9 _-]{3,24}$/.test(name)) {
+        throw { code: "invalid-name" };
+      }
+
+      return name;
+    }
+
+    function cleanAttack(value) {
+      return value.trim().slice(0, 24);
+    }
+
+    function formatTitle(titleName) {
+      return `"${titleName}"`;
+    }
+
+    function showSaveError(error, fallbackMessage) {
+      console.error("Customize save error:", error);
+
+      switch (error?.code) {
+        case "missing-name":
+          message.textContent = "Character name required.";
+          break;
+        case "invalid-name":
+          message.textContent = "Use 3-24 letters, numbers, spaces, _ or -.";
+          break;
+        case "invalid-title":
+          message.textContent = "Choose an unlocked title.";
+          break;
+        default:
+          message.textContent = fallbackMessage;
+      }
+    }
+  </script>
+</body>
+
+</html>

@@ -30,9 +30,7 @@
         <p id="characterLevel">Level 1</p>
         <div id="relicList" class="relic-list"></div>
         <div class="panel-actions">
-          <button type="button">Customize</button>
-          <button type="button" class="secondary">Spellbook</button>
-          <button type="button" class="secondary">Relics</button>
+          <button id="customizeBtn" type="button">Loadout</button>
         </div>
       </aside>
 
@@ -128,6 +126,14 @@
     const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
     const worldId = localStorage.getItem("worldId");
     const hubMessage = document.getElementById("hubMessage");
+    const DEFAULT_TITLE_ID = "beginner";
+    const FALLBACK_TITLE = {
+      name: "The Wordbearer",
+      description: "Given to every new hero who first steps into the tower.",
+      starter: true,
+    };
+    let titleCatalog = {};
+    let relicCatalog = {};
 
     if (!nickname || !isLoggedIn) {
       window.location.href = "home.html";
@@ -140,13 +146,23 @@
     document.getElementById("backToWorldBtn").addEventListener("click", () => {
       window.location.href = "world.html";
     });
+    document.getElementById("customizeBtn").addEventListener("click", () => {
+      window.location.href = "customize-character.html";
+    });
 
     async function loadMainLobby() {
       try {
-        const [playerSnapshot, worldSnapshot] = await Promise.all([
+        // The hub joins Firebase state with local catalogs. Firebase stores only IDs;
+        // the JSON files provide display names and descriptions.
+        const [playerSnapshot, worldSnapshot, loadedTitles, loadedRelics, dailyConditions] = await Promise.all([
           get(ref(db, `${GAME_NAME}/Players/${nickname}`)),
           get(ref(db, `${GAME_NAME}/Worlds/${worldId}`)),
+          loadTitleCatalog(),
+          loadRelicCatalog(),
+          loadDailyConditions(),
         ]);
+        titleCatalog = loadedTitles;
+        relicCatalog = loadedRelics;
 
         if (!playerSnapshot.exists()) {
           localStorage.removeItem("isLoggedIn");
@@ -169,11 +185,12 @@
           return;
         }
 
-        renderPlayer(player);
+        const normalizedPlayer = await normalizePlayerTitles(player);
+        renderPlayer(normalizedPlayer);
         renderWorld(world);
-        renderDailyStatus(new Date());
+        renderDailyStatus(new Date(), dailyConditions);
         renderWorldEvent(world);
-        renderTower(player, world);
+        renderTower(normalizedPlayer, world);
 
         await update(ref(db, `${GAME_NAME}/Players/${nickname}`), {
           lastHubVisit: serverTimestamp(),
@@ -184,23 +201,111 @@
       }
     }
 
+    async function loadTitleCatalog() {
+      const response = await fetch("character-titles.json");
+
+      if (!response.ok) {
+        throw new Error("Could not load character-titles.json.");
+      }
+
+      const catalog = await response.json();
+      return {
+        [DEFAULT_TITLE_ID]: FALLBACK_TITLE,
+        ...catalog,
+      };
+    }
+
+    async function loadRelicCatalog() {
+      const response = await fetch("relics.json");
+
+      if (!response.ok) {
+        throw new Error("Could not load relics.json.");
+      }
+
+      return response.json();
+    }
+
+    async function loadDailyConditions() {
+      const [goodResponse, badResponse] = await Promise.all([
+        fetch("daily-good-conditions.json"),
+        fetch("daily-bad-conditions.json"),
+      ]);
+
+      if (!goodResponse.ok || !badResponse.ok) {
+        throw new Error("Could not load daily condition files.");
+      }
+
+      return {
+        good: await goodResponse.json(),
+        bad: await badResponse.json(),
+      };
+    }
+
+    async function normalizePlayerTitles(player) {
+      const character = player.character || {};
+      // Older players may not have title fields yet. Normalize once here so the
+      // rest of the UI can assume the beginner title always exists.
+      const unlockedTitles = Array.isArray(character.unlockedTitles)
+        ? [...new Set([DEFAULT_TITLE_ID, ...character.unlockedTitles])]
+        : [DEFAULT_TITLE_ID];
+      const selectedTitle = unlockedTitles.includes(character.selectedTitle)
+        ? character.selectedTitle
+        : DEFAULT_TITLE_ID;
+      const selectedTitleText = formatTitle(titleCatalog[selectedTitle]?.name || FALLBACK_TITLE.name);
+      const updates = {};
+
+      if (!Array.isArray(character.unlockedTitles) || unlockedTitles.length !== character.unlockedTitles.length) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/unlockedTitles`] = unlockedTitles;
+      }
+
+      if (character.selectedTitle !== selectedTitle) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/selectedTitle`] = selectedTitle;
+      }
+
+      if (character.title !== selectedTitleText) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/title`] = selectedTitleText;
+      }
+
+      if (Object.keys(updates).length) {
+        updates[`${GAME_NAME}/Players/${nickname}/character/updatedAt`] = serverTimestamp();
+        await update(ref(db), updates);
+      }
+
+      return {
+        ...player,
+        character: {
+          ...character,
+          unlockedTitles,
+          selectedTitle,
+          title: selectedTitleText,
+        },
+      };
+    }
+
     function renderPlayer(player) {
       const character = player.character;
+      const selectedTitle = titleCatalog[character.selectedTitle] || FALLBACK_TITLE;
       document.getElementById("characterName").textContent = character.name;
-      document.getElementById("characterTitle").textContent = character.title || "\"The Wordbearer\"";
+      document.getElementById("characterTitle").textContent = formatTitle(selectedTitle.name);
       document.getElementById("characterLevel").textContent = `Level ${character.level || player.level || 1}`;
 
-      const relics = character.relics || ["Empty Relic Slot", "Empty Relic Slot", "Empty Relic Slot"];
+      const relics = Array.isArray(character.equippedRelics) && character.equippedRelics.length
+        ? character.equippedRelics.map((relicId) => relicCatalog[relicId]?.name || relicId)
+        : ["Empty Relic Slot", "Empty Relic Slot", "Empty Relic Slot"];
       document.getElementById("relicList").innerHTML = relics
         .map((relic) => `<span>${relic}</span>`)
         .join("");
+    }
+
+    function formatTitle(titleName) {
+      return `"${titleName}"`;
     }
 
     function renderWorld(world) {
       document.getElementById("hubWorldName").textContent = world.name || worldId;
     }
 
-    function renderDailyStatus(date) {
+    function renderDailyStatus(date, dailyConditions) {
       const month = date.getMonth() + 1;
       const day = date.getDate();
       const weekday = date.getDay();
@@ -216,38 +321,72 @@
       });
 
       let title = "Today's Conditions";
-      let list = [
-        "+ Fire words deal 10% more damage",
-        "+ Words with double letters gain crit chance",
-        "- Ice effects reduced by 15%",
-        "+ Bosses have increased health",
-      ];
+      const list = selectDailyConditions(date, dailyConditions);
 
       if (dateKey === 1031) {
         title = "The Veil Thins";
-        list = [
-          "+ Dark words empowered",
-          "+ Corrupted enemies appear",
-          "+ Rare relic drop chance increased",
-        ];
       } else if (dateKey === 1225) {
         title = "The Frost Season";
-        list = [
-          "+ Ice words stronger",
-          "+ Healing effects increased",
-          "+ Winter boss active",
-        ];
       } else if (weekday === 5 && day === 13) {
         title = "The Cursed Day";
-        list = [
-          "+ Unknown word effects increased",
-          "+ Random mutations occur each floor",
-          "+ Boss intent is partially hidden",
-        ];
       }
 
       dailyTitle.textContent = title;
-      modifiers.innerHTML = list.map((modifier) => `<li>${modifier}</li>`).join("");
+      modifiers.innerHTML = "";
+      list.forEach((modifier) => {
+        const item = document.createElement("li");
+        item.className = modifier.type;
+        item.textContent = `${modifier.prefix} ${modifier.name}: ${modifier.description}`;
+        modifiers.appendChild(item);
+      });
+    }
+
+    function selectDailyConditions(date, dailyConditions) {
+      // Deterministic by date: every player sees the same conditions on a given day.
+      const seed = Number(
+        `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`
+      );
+      const goodEntries = Object.entries(dailyConditions.good || {}).filter(([id, condition]) => isCatalogEntry(id, condition));
+      const badEntries = Object.entries(dailyConditions.bad || {}).filter(([id, condition]) => isCatalogEntry(id, condition));
+      const pattern = seed % 4;
+      const goodCount = [2, 1, 2, 0][pattern];
+      const badCount = [0, 1, 0, 2][pattern];
+
+      return [
+        ...pickConditions(goodEntries, goodCount, seed, "good", "+"),
+        ...pickConditions(badEntries, badCount, seed + 37, "bad", "-"),
+      ];
+    }
+
+    function pickConditions(entries, count, seed, type, prefix) {
+      if (!entries.length || count <= 0) {
+        return [];
+      }
+
+      const selected = [];
+      let index = seed % entries.length;
+
+      while (selected.length < Math.min(count, entries.length)) {
+        const [id, condition] = entries[index];
+
+        if (!selected.some((item) => item.id === id)) {
+          selected.push({
+            id,
+            type,
+            prefix,
+            name: condition.name,
+            description: condition.description,
+          });
+        }
+
+        index = (index + 3) % entries.length;
+      }
+
+      return selected;
+    }
+
+    function isCatalogEntry(id, value) {
+      return !id.startsWith("_") && value && typeof value === "object";
     }
 
     function renderWorldEvent(world) {

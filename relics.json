@@ -1,0 +1,37 @@
+{
+  "_documentation": {
+    "purpose": "All possible relics. Players can equip only relic IDs listed in character.unlockedRelics.",
+    "equip_limit": 3,
+    "starter_ids": ["ember_charm", "frost_lens"]
+  },
+  "ember_charm": {
+    "name": "Ember Charm",
+    "effect": "Fire words deal 8% more damage.",
+    "rarity": "Common"
+  },
+  "frost_lens": {
+    "name": "Frost Lens",
+    "effect": "Ice words slow enemies for 1 extra turn.",
+    "rarity": "Common"
+  },
+  "quill_of_echoes": {
+    "name": "Quill of Echoes",
+    "effect": "The first repeated letter in a word adds bonus damage.",
+    "rarity": "Rare"
+  },
+  "glass_heart": {
+    "name": "Glass Heart",
+    "effect": "Gain a shield after using an 8-letter word.",
+    "rarity": "Rare"
+  },
+  "tower_compass": {
+    "name": "Tower Compass",
+    "effect": "Reveal one enemy weakness at the start of a floor.",
+    "rarity": "Epic"
+  },
+  "veil_candle": {
+    "name": "Veil Candle",
+    "effect": "Dark words have increased critical chance.",
+    "rarity": "Epic"
+  }
+}

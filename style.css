@@ -213,6 +213,7 @@ h2 {
 }
 
 .hub-body {
+  /* Shared full-page background for the world hub and loadout pages. */
   display: block;
   min-height: 100vh;
   overflow-x: hidden;
@@ -237,6 +238,7 @@ h2 {
 }
 
 .hub-grid {
+  /* Main lobby layout: player card left, tower center, status panels around it. */
   display: grid;
   grid-template-columns: minmax(230px, 0.85fr) minmax(320px, 1.4fr) minmax(260px, 1fr);
   grid-template-areas:
@@ -435,6 +437,14 @@ h2 {
   color: #bca8e8;
 }
 
+.title-description {
+  min-height: 38px;
+  margin: 0;
+  color: #bca8e8;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
 .modifier-list {
   margin: 0;
   padding-left: 18px;
@@ -443,6 +453,14 @@ h2 {
 
 .modifier-list li {
   margin: 10px 0;
+}
+
+.modifier-list li.good {
+  color: #a9f0c0;
+}
+
+.modifier-list li.bad {
+  color: #ffb3b3;
 }
 
 .hp-bar {
@@ -494,6 +512,172 @@ h2 {
   color: #ffb3b3;
 }
 
+.customize-shell {
+  /* Loadout page container; wider than login cards, narrower than the full hub. */
+  width: min(1040px, 94vw);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 28px 0;
+}
+
+.top-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tab-button {
+  margin: 0;
+  background: #302549;
+}
+
+.tab-button.active {
+  background: #8f66ff;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+.loadout-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(300px, 1.1fr);
+  gap: 16px;
+}
+
+.hub-panel label {
+  display: block;
+  margin-top: 14px;
+  color: #bca8e8;
+  font-size: 14px;
+}
+
+.sprite-preview {
+  margin-bottom: 16px;
+}
+
+.sprite-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
+}
+
+.sprite-choice {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-height: 108px;
+  margin: 0;
+  background: #171324;
+  border: 1px solid transparent;
+}
+
+.sprite-choice.selected,
+.loadout-item.selected {
+  border-color: #f4eaff;
+  box-shadow: 0 0 0 2px #8f66ff66;
+}
+
+.mini-sprite {
+  position: relative;
+  width: 34px;
+  height: 54px;
+  border-radius: 18px 18px 8px 8px;
+  background: linear-gradient(180deg, #f4eaff 0 28%, #8f66ff 29% 100%);
+}
+
+.mini-sprite::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 8px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #f4eaff;
+}
+
+.sprite-violet {
+  /* Temporary CSS sprite skins until image sprites are loaded from sprites/player/. */
+  background: linear-gradient(180deg, #f4eaff 0 26%, #8f66ff 27% 100%);
+}
+
+.sprite-ember {
+  background: linear-gradient(180deg, #ffe8d4 0 26%, #ff6b4a 27% 100%);
+}
+
+.sprite-frost {
+  background: linear-gradient(180deg, #effcff 0 26%, #46b8ff 27% 100%);
+}
+
+.sprite-verdant {
+  background: linear-gradient(180deg, #f0ffe8 0 26%, #51b86f 27% 100%);
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.loadout-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.loadout-item {
+  display: grid;
+  gap: 8px;
+  min-height: 142px;
+  margin: 0;
+  border: 1px solid #8f66ff33;
+  background: #171324;
+  text-align: left;
+}
+
+.loadout-item span,
+.loadout-item p {
+  margin: 0;
+  color: #bca8e8;
+  font-weight: normal;
+}
+
+.attack-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.attack-slot {
+  padding: 12px;
+  border: 1px solid #8f66ff33;
+  border-radius: 8px;
+  background: #171324;
+}
+
+.attack-slot label {
+  margin-top: 0;
+}
+
+.attack-slot input {
+  margin-top: 8px;
+}
+
+#customizeMessage {
+  min-height: 22px;
+  color: #ffb3b3;
+}
+
 @keyframes drift {
   from {
     transform: translateX(0);
@@ -530,5 +714,10 @@ h2 {
 
   .tower-stage {
     min-height: 520px;
+  }
+
+  .loadout-grid,
+  .top-tabs {
+    grid-template-columns: 1fr;
   }
 }

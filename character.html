@@ -58,6 +58,9 @@
     const characterMessage = document.getElementById("characterMessage");
 
     let classes = {};
+    let titles = {};
+    const DEFAULT_TITLE_ID = "beginner";
+    const STARTER_RELIC_IDS = ["ember_charm", "frost_lens"];
 
     if (!nickname || !isLoggedIn) {
       window.location.href = "home.html";
@@ -66,7 +69,7 @@
 
       if (canCreateCharacter) {
         try {
-          await loadClasses();
+          await Promise.all([loadClasses(), loadTitles()]);
           classSelect.addEventListener("change", renderClassPreview);
           createCharacterBtn.addEventListener("click", createCharacter);
         } catch (error) {
@@ -105,14 +108,27 @@
 
       classSelect.innerHTML = "";
 
-      Object.entries(classes).forEach(([classId, classData]) => {
-        const option = document.createElement("option");
-        option.value = classId;
-        option.textContent = classData.name;
-        classSelect.appendChild(option);
-      });
+      // Catalog JSON files may contain _documentation entries for future reference.
+      Object.entries(classes)
+        .filter(([classId, classData]) => isCatalogEntry(classId, classData))
+        .forEach(([classId, classData]) => {
+          const option = document.createElement("option");
+          option.value = classId;
+          option.textContent = classData.name;
+          classSelect.appendChild(option);
+        });
 
       renderClassPreview();
+    }
+
+    async function loadTitles() {
+      const response = await fetch("character-titles.json");
+
+      if (!response.ok) {
+        throw new Error("Could not load character-titles.json.");
+      }
+
+      titles = await response.json();
     }
 
     async function createCharacter() {
@@ -121,6 +137,7 @@
         const name = cleanCharacterName(characterName.value);
         const classId = classSelect.value;
         const classData = classes[classId];
+        const beginnerTitle = titles[DEFAULT_TITLE_ID];
 
         if (!classData) {
           throw { code: "missing-class" };
@@ -133,6 +150,13 @@
             className: classData.name,
             attackType: classData.attackType,
             stats: classData.stats,
+            unlockedTitles: [DEFAULT_TITLE_ID],
+            selectedTitle: DEFAULT_TITLE_ID,
+            title: beginnerTitle ? `"${beginnerTitle.name}"` : "\"The Wordbearer\"",
+            spriteId: "violet",
+            unlockedRelics: STARTER_RELIC_IDS,
+            equippedRelics: [],
+            savedAttacks: ["", "", "", "", "", "", "", ""],
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
           },
@@ -180,6 +204,10 @@
 
     function labelStat(stat) {
       return stat.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase());
+    }
+
+    function isCatalogEntry(id, value) {
+      return !id.startsWith("_") && value && typeof value === "object";
     }
 
     function showCharacterError(error) {

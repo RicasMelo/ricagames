@@ -1,0 +1,40 @@
+{
+  "_documentation": {
+    "purpose": "All possible character titles. A player only sees IDs listed in character.unlockedTitles.",
+    "starter_id": "beginner",
+    "display_rule": "The UI wraps the selected title name in quotes when shown beside the character name."
+  },
+  "beginner": {
+    "name": "Freshman",
+    "description": "Given to every new hero who first steps into the tower.",
+    "starter": true
+  },
+  "ember_scribe": {
+    "name": "Ember Scribe",
+    "description": "A title for players who master fire words."
+  },
+  "frostbound": {
+    "name": "Frostbound",
+    "description": "A title for players who survive the winter trials."
+  },
+  "glassbreaker": {
+    "name": "Glassbreaker",
+    "description": "A title for players who help defeat a world event boss."
+  },
+  "relic_seeker": {
+    "name": "Relic Seeker",
+    "description": "A title for players who collect rare relics."
+  },
+  "towerbound": {
+    "name": "Towerbound",
+    "description": "A title for players who push deep into the ascension tower."
+  },
+  "veilwalker": {
+    "name": "Veilwalker",
+    "description": "A title for players who thrive when the veil thins."
+  },
+  "cursed_quill": {
+    "name": "Cursed Quill",
+    "description": "A title for players who endure cursed day modifiers."
+  }
+}
