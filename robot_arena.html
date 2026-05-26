@@ -107,6 +107,12 @@
       box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
     }
 
+    .arena-column {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
     canvas {
       display: block;
       width: 100%;
@@ -266,17 +272,23 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      justify-content: flex-end;
+      justify-content: flex-start;
       gap: 6px;
       color: var(--muted);
-      font-size: 0.82rem;
+      font-size: 1.6rem;
+      line-height: 1.18;
     }
 
     .feed p {
       margin: 0;
-      padding: 6px 8px;
+      padding: 8px 10px;
       border-radius: 6px;
       background: #171b21;
+    }
+
+    .event-panel {
+      width: min(var(--arena-side, 100%), 100%);
+      justify-self: center;
     }
 
     .power-grid {
@@ -356,28 +368,35 @@
     </header>
 
     <section class="layout">
-      <div class="arena-wrap">
-        <canvas id="arena" width="960" height="720" aria-label="Robot Arena battle simulation"></canvas>
-        <div class="banner" id="banner">
-          <strong>Four robots enter. One remains.</strong>
-          <span>AI drivers ram, dodge, and shove opponents into the pit.</span>
-        </div>
-        <div class="start-panel" id="startPanel">
-          <div class="winner-card">
-            <p class="eyebrow">Ready</p>
-            <h2>Robot Arena</h2>
-            <p>Press Start, Enter, or Space to begin the fight.</p>
-            <button id="startBtn" type="button" autofocus>Start Fight</button>
+      <div class="arena-column">
+        <div class="arena-wrap">
+          <canvas id="arena" width="960" height="720" aria-label="Robot Arena battle simulation"></canvas>
+          <div class="banner" id="banner">
+            <strong>Four robots enter. One remains.</strong>
+            <span>AI drivers ram, dodge, and shove opponents into the pit.</span>
+          </div>
+          <div class="start-panel" id="startPanel">
+            <div class="winner-card">
+              <p class="eyebrow">Ready</p>
+              <h2>Robot Arena</h2>
+              <p>Press Start, Enter, or Space to begin the fight.</p>
+              <button id="startBtn" type="button" autofocus>Start Fight</button>
+            </div>
+          </div>
+          <div class="winner-panel" id="winnerPanel" aria-live="polite">
+            <div class="winner-card">
+              <p class="eyebrow">Winner</p>
+              <h2 id="winnerName">Robot</h2>
+              <p id="winnerText">Last robot standing.</p>
+              <button id="winnerRestartBtn" type="button">Restart Match</button>
+            </div>
           </div>
         </div>
-        <div class="winner-panel" id="winnerPanel" aria-live="polite">
-          <div class="winner-card">
-            <p class="eyebrow">Winner</p>
-            <h2 id="winnerName">Robot</h2>
-            <p id="winnerText">Last robot standing.</p>
-            <button id="winnerRestartBtn" type="button">Restart Match</button>
-          </div>
-        </div>
+
+        <section class="panel event-panel">
+          <p class="eyebrow">Event Feed</p>
+          <div class="feed" id="feed"></div>
+        </section>
       </div>
 
       <aside class="side">
@@ -412,11 +431,6 @@
             </div>
           </div>
         </section>
-
-        <section class="panel">
-          <p class="eyebrow">Event Feed</p>
-          <div class="feed" id="feed"></div>
-        </section>
       </aside>
     </section>
   </main>
@@ -444,7 +458,6 @@
     const powerTypes = [
       { id: "speed", label: "Speed boost", color: "#48d5d9" },
       { id: "grow", label: "Size increase", color: "#f5c451" },
-      { id: "shrink", label: "Size decrease", color: "#f28f45" },
       { id: "teleport", label: "Teleportation", color: "#a77cff" },
       { id: "freeze", label: "Freeze pulse", color: "#51a7ff" },
       { id: "shield", label: "Shield recovery", color: "#4ed184" }
@@ -458,8 +471,23 @@
       burstCooldownMax: 1.18,
       speedBoostCooldownMultiplier: 0.1,
       speedBoostDurationMultiplier: 0.5,
+      speedBoostForceMultiplier: 0.75,
+      sizeBoostCooldownMultiplier: 1.45,
+      sizeBoostDurationMultiplier: 0.72,
+      sizeBoostForceMultiplier: 1.35,
       startingCooldownMin: 0.12,
       startingCooldownMax: 0.85
+    };
+    const powerTuning = {
+      speedBoostDuration: 5.6,
+      freezeDuration: 2.4,
+      shieldDuration: 0,
+      sizeBoostDuration: 5,
+      sizeBoostAmount: 7,
+      maxRobotSize: 37
+    };
+    const aiTuning = {
+      centerMoveChance: 0.2
     };
 
     let bots = [];
@@ -486,8 +514,8 @@
     }
 
     function addFeed(text) {
-      messages.push(text);
-      messages = messages.slice(-6);
+      messages.unshift(text);
+      messages = messages.slice(0, 6);
       feed.innerHTML = messages.map((message) => `<p>${message}</p>`).join("");
     }
 
@@ -516,9 +544,10 @@
         alive: true,
         indestructible: false,
         shield: false,
+        shieldTimer: 0,
         frozen: 0,
         speedBoost: 0,
-        sizeTimer: 0,
+        sizeBoostTimer: 0,
         eliminatedAt: 0,
         spin: rand(-2, 2)
       };
@@ -565,9 +594,7 @@
       paused = false;
       pauseBtn.disabled = false;
       startPanel.classList.add("hidden");
-      banner.querySelector("strong").textContent = "Fight started.";
-      banner.querySelector("span").textContent = "The robots are now hunting for ring-outs.";
-      banner.style.display = "block";
+      banner.style.display = "none";
       addFeed("Fight started.");
     }
 
@@ -635,9 +662,23 @@
       bot.thrustCooldown -= dt;
       bot.thrustTime = Math.max(0, bot.thrustTime - dt);
       if (bot.thrustCooldown <= 0 && bot.thrustTime === 0) {
+        if (Math.random() < aiTuning.centerMoveChance) {
+          const centerX = arena.x + arena.w / 2;
+          const centerY = arena.y + arena.h / 2;
+          const dx = centerX - bot.x;
+          const dy = centerY - bot.y;
+          const centerLen = Math.hypot(dx, dy) || 1;
+          ax = (dx / centerLen) * bot.accel;
+          ay = (dy / centerLen) * bot.accel;
+        }
         const len = Math.hypot(ax, ay) || 1;
-        const cooldownMultiplier = bot.speedBoost > 0 ? movementTuning.speedBoostCooldownMultiplier : 1;
-        const durationMultiplier = bot.speedBoost > 0 ? movementTuning.speedBoostDurationMultiplier : 1;
+        const isBigger = bot.r > bot.baseR + 1;
+        const cooldownMultiplier =
+          (bot.speedBoost > 0 ? movementTuning.speedBoostCooldownMultiplier : 1) *
+          (isBigger ? movementTuning.sizeBoostCooldownMultiplier : 1);
+        const durationMultiplier =
+          (bot.speedBoost > 0 ? movementTuning.speedBoostDurationMultiplier : 1) *
+          (isBigger ? movementTuning.sizeBoostDurationMultiplier : 1);
         bot.thrustX = ax / len;
         bot.thrustY = ay / len;
         bot.thrustTime = rand(
@@ -651,7 +692,11 @@
       }
 
       if (bot.thrustTime > 0) {
-        const pulse = bot.accel * bot.burstPower * movementTuning.burstForceMultiplier;
+        const isBigger = bot.r > bot.baseR + 1;
+        const forceMultiplier =
+          (bot.speedBoost > 0 ? movementTuning.speedBoostForceMultiplier : 1) *
+          (isBigger ? movementTuning.sizeBoostForceMultiplier : 1);
+        const pulse = bot.accel * bot.burstPower * movementTuning.burstForceMultiplier * forceMultiplier;
         bot.vx += bot.thrustX * pulse * dt;
         bot.vy += bot.thrustY * pulse * dt;
       }
@@ -674,26 +719,21 @@
         life: 12,
         pulse: rand(0, TAU)
       });
-      addFeed(`${type.label} dropped into the arena.`);
     }
 
     function collectPower(bot, power) {
       if (power.id === "speed") {
-        bot.speedBoost = 5.6;
+        bot.speedBoost = powerTuning.speedBoostDuration;
         bot.thrustCooldown *= movementTuning.speedBoostCooldownMultiplier;
         addFeed(`${bot.name} overclocks its drive.`);
       }
       if (power.id === "grow") {
-        bot.r = Math.min(37, bot.r + 7);
+        bot.r = Math.min(powerTuning.maxRobotSize, bot.r + powerTuning.sizeBoostAmount);
         bot.mass = bot.r * bot.r;
-        bot.sizeTimer = 7.5;
+        bot.sizeBoostTimer = powerTuning.sizeBoostDuration;
+        bot.thrustCooldown *= movementTuning.sizeBoostCooldownMultiplier;
+        bot.thrustTime *= movementTuning.sizeBoostDurationMultiplier;
         addFeed(`${bot.name} gets heavier.`);
-      }
-      if (power.id === "shrink") {
-        bot.r = Math.max(14, bot.r - 6);
-        bot.mass = bot.r * bot.r;
-        bot.sizeTimer = 7.5;
-        addFeed(`${bot.name} slips into compact mode.`);
       }
       if (power.id === "teleport") {
         bot.x = rand(arena.x + 90, arena.x + arena.w - 90);
@@ -704,13 +744,14 @@
         addFeed(`${bot.name} phase-jumps.`);
       }
       if (power.id === "freeze") {
-        bot.frozen = 2.4;
+        bot.frozen = powerTuning.freezeDuration;
         bot.vx *= 0.12;
         bot.vy *= 0.12;
         addFeed(`${bot.name} is locked by the freeze trap.`);
       }
       if (power.id === "shield") {
         bot.shield = true;
+        bot.shieldTimer = powerTuning.shieldDuration;
         addFeed(`${bot.name} activates a recovery shield.`);
       }
     }
@@ -785,6 +826,7 @@
 
       if (bot.shield) {
         bot.shield = false;
+        bot.shieldTimer = 0;
         bot.x = arena.x + arena.w / 2 + rand(-75, 75);
         bot.y = arena.y + arena.h / 2 + rand(-75, 75);
         bot.vx *= -0.25;
@@ -812,11 +854,16 @@
         if (!bot.alive) continue;
         bot.frozen = Math.max(0, bot.frozen - dt);
         bot.speedBoost = Math.max(0, bot.speedBoost - dt);
-        bot.sizeTimer = Math.max(0, bot.sizeTimer - dt);
-        if (bot.sizeTimer === 0 && bot.r !== bot.baseR) {
-          bot.r += (bot.baseR - bot.r) * Math.min(1, dt * 4);
-          if (Math.abs(bot.r - bot.baseR) < 0.25) bot.r = bot.baseR;
-          bot.mass = bot.r * bot.r;
+        if (bot.shield && bot.shieldTimer > 0) {
+          bot.shieldTimer = Math.max(0, bot.shieldTimer - dt);
+          if (bot.shieldTimer === 0) bot.shield = false;
+        }
+        if (bot.sizeBoostTimer > 0) {
+          bot.sizeBoostTimer = Math.max(0, bot.sizeBoostTimer - dt);
+          if (bot.sizeBoostTimer === 0) {
+            bot.r = bot.baseR;
+            bot.mass = bot.r * bot.r;
+          }
         }
         applyBotAI(bot, dt);
       }
@@ -988,18 +1035,6 @@
         ctx.stroke();
       }
 
-      if (type === "shrink") {
-        ctx.strokeRect(-7, -7, 14, 14);
-        ctx.beginPath();
-        ctx.moveTo(-7, -2);
-        ctx.lineTo(-2, -2);
-        ctx.lineTo(-2, -7);
-        ctx.moveTo(7, 2);
-        ctx.lineTo(2, 2);
-        ctx.lineTo(2, 7);
-        ctx.stroke();
-      }
-
       if (type === "teleport") {
         ctx.beginPath();
         ctx.arc(-3, 0, 6, Math.PI * 0.35, Math.PI * 1.65);
@@ -1153,6 +1188,7 @@
       arena.h = arenaSide;
       arena.x = (cssW - arena.w) / 2;
       arena.y = (cssH - arena.h) / 2 + 6;
+      canvas.closest(".arena-column").style.setProperty("--arena-side", `${arenaSide}px`);
     }
 
     function loop(now) {
@@ -1182,10 +1218,13 @@
     restartBtn.addEventListener("click", resetMatch);
     winnerRestartBtn.addEventListener("click", resetMatch);
     window.addEventListener("keydown", (event) => {
-      if (started || matchOver) return;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        startMatch();
+        if (matchOver) {
+          resetMatch();
+        } else if (!started) {
+          startMatch();
+        }
       }
     });
     window.addEventListener("resize", () => {
