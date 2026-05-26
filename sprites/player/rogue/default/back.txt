@@ -1,0 +1,18 @@
+Resource: sprites/player/rogue/default/back.png
+
+What it is:
+- Rogue default skin, back-facing battle sprite.
+
+Where it is used:
+- Battles where the player faces enemies.
+
+Expected resolution:
+- 128 x 128 px
+
+Background:
+- Transparent.
+
+Style notes:
+- Same size, scale, and foot position as front.png.
+- Back view should clearly read as the same skin.
+

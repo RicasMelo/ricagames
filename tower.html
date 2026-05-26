@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Word Tower</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body class="hub-body">
+  <main class="tower-run-shell">
+    <header class="hub-header">
+      <div>
+        <p class="eyebrow" id="floorTypeLabel">Tower Run</p>
+        <h1 id="towerFloorTitle">Floor 1</h1>
+      </div>
+      <button id="backToHubBtn" type="button" class="icon-like">Hub</button>
+    </header>
+
+    <section class="tower-run-grid">
+      <aside class="hub-panel run-panel">
+        <p class="eyebrow">Character</p>
+        <h2 id="heroName">Hero</h2>
+        <div class="combatant-card">
+          <div class="combatant-row">
+            <span>HP</span>
+            <strong id="heroHpText">0 / 0</strong>
+          </div>
+          <div class="hp-bar"><span id="heroHpBar"></span></div>
+          <p id="heroLevelText" class="muted">Run level 1</p>
+        </div>
+        <dl class="tower-stats">
+          <div>
+            <dt>Current Floor</dt>
+            <dd id="runFloor">1</dd>
+          </div>
+          <div>
+            <dt>Run XP</dt>
+            <dd id="runXp">0</dd>
+          </div>
+          <div>
+            <dt>Potions</dt>
+            <dd id="potionCount">2</dd>
+          </div>
+        </dl>
+      </aside>
+
+      <section class="hub-panel encounter-panel">
+        <div id="combatView">
+          <p class="eyebrow">Enemy</p>
+          <h2 id="enemyName">Enemy</h2>
+          <div class="combatant-card enemy-card">
+            <div class="combatant-row">
+              <span>HP</span>
+              <strong id="enemyHpText">0 / 0</strong>
+            </div>
+            <div class="hp-bar"><span id="enemyHpBar"></span></div>
+            <p id="enemyIntent" class="muted">Intent unknown</p>
+          </div>
+
+          <div class="attack-book">
+            <label for="attackWord">Attack word</label>
+            <input id="attackWord" type="text" maxlength="24" placeholder="Type a word or use a saved attack" />
+            <div id="savedAttackButtons" class="saved-attack-buttons"></div>
+          </div>
+
+          <div class="tower-actions">
+            <button id="attackBtn" type="button">Attack</button>
+            <button id="potionBtn" type="button" class="secondary">Use Potion</button>
+          </div>
+        </div>
+
+        <div id="specialView" class="hidden">
+          <p class="eyebrow" id="specialType">Special Floor</p>
+          <h2 id="specialTitle">Sanctuary</h2>
+          <p id="specialText" class="muted"></p>
+          <div id="specialChoices" class="choice-list"></div>
+        </div>
+
+        <div id="rewardView" class="hidden">
+          <p class="eyebrow">Floor Cleared</p>
+          <h2 id="rewardTitle">Choose a reward</h2>
+          <div id="rewardChoices" class="choice-list"></div>
+        </div>
+
+        <div id="deathView" class="hidden">
+          <p class="eyebrow">Climb Ended</p>
+          <h2>You fell in the tower</h2>
+          <p class="muted">Temporary run progress, rewards, and upgrades were lost.</p>
+          <button id="restartRunBtn" type="button">Start New Climb</button>
+        </div>
+      </section>
+
+      <aside class="hub-panel run-panel">
+        <p class="eyebrow">Run Build</p>
+        <h2>Temporary Power</h2>
+        <h3>Relics</h3>
+        <ul id="runRelics" class="modifier-list"></ul>
+        <h3>Skills</h3>
+        <ul id="runSkills" class="modifier-list"></ul>
+        <h3>Effects</h3>
+        <ul id="runEffects" class="modifier-list"></ul>
+      </aside>
+    </section>
+
+    <section class="hub-panel tower-log-panel">
+      <p class="eyebrow">Run Log</p>
+      <ul id="towerLog" class="modifier-list"></ul>
+    </section>
+
+    <p id="towerMessage"></p>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+    import {
+      getDatabase,
+      ref,
+      get,
+      set,
+      update,
+      remove,
+      serverTimestamp,
+    } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-database.js";
+
+    const GAME_NAME = "Game1";
+    const BASE_POTIONS = 2;
+    const FLOOR_TYPES = {
+      combat: "Combat Floor",
+      sanctuary: "Sanctuary Floor",
+      event: "Event Floor",
+      elite: "Elite Floor",
+      boss: "Boss Floor",
+    };
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyB6bbntbA1neFXQQgntP-rJUJK_bevSw2g",
+      authDomain: "ricagames.firebaseapp.com",
+      databaseURL: "https://ricagames-default-rtdb.firebaseio.com",
+      projectId: "ricagames",
+      storageBucket: "ricagames.firebasestorage.app",
+      messagingSenderId: "892798133679",
+      appId: "1:892798133679:web:164320be2bc582a3153b5a",
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const nickname = localStorage.getItem("username");
+    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+    const worldId = localStorage.getItem("worldId");
+    const message = document.getElementById("towerMessage");
+
+    let player = null;
+    let world = null;
+    let run = null;
+    let relicCatalog = {};
+
+    if (!nickname || !isLoggedIn) {
+      window.location.href = "home.html";
+    } else if (!worldId) {
+      window.location.href = "lobby.html";
+    } else {
+      await loadTower();
+    }
+
+    document.getElementById("backToHubBtn").addEventListener("click", () => {
+      window.location.href = "main-lobby.html";
+    });
+    document.getElementById("attackBtn").addEventListener("click", playerAttack);
+    document.getElementById("potionBtn").addEventListener("click", usePotion);
+    document.getElementById("restartRunBtn").addEventListener("click", startNewRun);
+    document.getElementById("attackWord").addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        playerAttack();
+      }
+    });
+
+    async function loadTower() {
+      try {
+        const [playerSnapshot, worldSnapshot, relics] = await Promise.all([
+          get(ref(db, `${GAME_NAME}/Players/${nickname}`)),
+          get(ref(db, `${GAME_NAME}/Worlds/${worldId}`)),
+          loadJson("relics.json"),
+        ]);
+
+        if (!playerSnapshot.exists() || !playerSnapshot.val()?.character?.name) {
+          window.location.href = "character.html";
+          return;
+        }
+
+        if (!worldSnapshot.exists()) {
+          localStorage.removeItem("worldId");
+          window.location.href = "lobby.html";
+          return;
+        }
+
+        player = playerSnapshot.val();
+        world = worldSnapshot.val();
+        relicCatalog = relics;
+        run = player.towerRun?.active ? player.towerRun : createRun(player);
+
+        if (!player.towerRun?.active) {
+          await saveRun();
+        }
+
+        renderTower();
+      } catch (error) {
+        console.error("Tower error:", error);
+        message.textContent = "Could not load the tower.";
+      }
+    }
+
+    async function loadJson(path) {
+      const response = await fetch(path);
+
+      if (!response.ok) {
+        throw new Error(`Could not load ${path}.`);
+      }
+
+      return response.json();
+    }
+
+    function createRun(sourcePlayer) {
+      const character = sourcePlayer.character;
+      const maxHp = Number(character.stats?.health || 100);
+
+      return {
+        active: true,
+        worldId,
+        floor: 1,
+        runLevel: 1,
+        xp: 0,
+        hp: maxHp,
+        maxHp,
+        potions: BASE_POTIONS,
+        relics: [...(character.equippedRelics || [])],
+        skills: ["Strike"],
+        effects: [],
+        temporaryUpgrades: [],
+        state: "floor",
+        currentEncounter: createFloor(1),
+        log: ["The climb begins."],
+        startedAt: Date.now(),
+      };
+    }
+
+    function createFloor(floor) {
+      const type = getFloorType(floor);
+
+      if (type === "combat" || type === "elite" || type === "boss") {
+        return {
+          type,
+          enemy: createEnemy(floor, type),
+        };
+      }
+
+      return { type };
+    }
+
+    function getFloorType(floor) {
+      if (floor % 10 === 0) return "boss";
+      if (floor % 5 === 0) return "sanctuary";
+      if (floor % 4 === 0) return "elite";
+      if (floor % 3 === 0) return "event";
+      return "combat";
+    }
+
+    function createEnemy(floor, type) {
+      const templates = {
+        combat: ["Hollow Scribe", "Ink Wisp", "Rune Gnawer"],
+        elite: ["Oathbound Sentinel", "Mirror Duelist", "Iron Lexicant"],
+        boss: ["The Floor Warden", "The Glass Saint's Herald", "The Locked Choir"],
+      };
+      const names = templates[type];
+      const multiplier = type === "boss" ? 2.4 : type === "elite" ? 1.55 : 1;
+      const maxHp = Math.round((42 + floor * 10) * multiplier);
+      const attack = Math.round((7 + floor * 2) * multiplier);
+
+      return {
+        name: names[floor % names.length],
+        maxHp,
+        hp: maxHp,
+        attack,
+        intent: type === "boss" ? "Crushing spell" : type === "elite" ? "Focused strike" : "Attack",
+      };
+    }
+
+    async function playerAttack() {
+      if (!isCombatFloor()) return;
+
+      const wordInput = document.getElementById("attackWord");
+      const word = cleanAttackWord(wordInput.value || "Strike");
+      const enemy = run.currentEncounter.enemy;
+      const damage = calculatePlayerDamage(word);
+      enemy.hp = Math.max(0, enemy.hp - damage);
+      addLog(`${player.character.name} used ${word} for ${damage} damage.`);
+      wordInput.value = "";
+
+      if (enemy.hp <= 0) {
+        await clearFloor();
+        return;
+      }
+
+      await enemyTurn();
+      await saveRun();
+      renderTower();
+    }
+
+    async function enemyTurn() {
+      const enemy = run.currentEncounter.enemy;
+      const defense = Number(player.character.stats?.defense || 0);
+      const shield = run.effects.includes("Shielded") ? 5 : 0;
+      const damage = Math.max(1, enemy.attack - Math.floor(defense / 3) - shield);
+      run.hp = Math.max(0, run.hp - damage);
+      addLog(`${enemy.name} dealt ${damage} damage.`);
+
+      if (run.hp <= 0) {
+        await endRunByDeath();
+      }
+    }
+
+    function calculatePlayerDamage(word) {
+      const stats = player.character.stats || {};
+      const attackStat = Math.max(Number(stats.attack || 0), Number(stats.magicAttack || 0));
+      let damage = word.length * 3 + attackStat + run.runLevel * 2;
+
+      if (run.relics.includes("ember_charm") && /[aeiou]/i.test(word)) {
+        damage = Math.round(damage * 1.08);
+      }
+
+      if (run.temporaryUpgrades.includes("Sharper Words")) {
+        damage += 5;
+      }
+
+      if (run.skills.includes("Longform")) {
+        damage += word.length >= 7 ? 8 : 0;
+      }
+
+      return Math.max(1, damage);
+    }
+
+    async function usePotion() {
+      if (run.state === "dead" || run.potions <= 0) return;
+
+      const healed = Math.min(35, run.maxHp - run.hp);
+      run.hp += healed;
+      run.potions -= 1;
+      addLog(`Used a potion and healed ${healed} HP.`);
+
+      if (isCombatFloor()) {
+        await enemyTurn();
+      }
+
+      await saveRun();
+      renderTower();
+    }
+
+    async function clearFloor() {
+      const floor = run.floor;
+      const xpGain = run.currentEncounter.type === "boss" ? 60 : run.currentEncounter.type === "elite" ? 35 : 20;
+      run.xp += xpGain;
+      addLog(`Floor ${floor} cleared. Gained ${xpGain} XP.`);
+
+      while (run.xp >= run.runLevel * 50) {
+        run.xp -= run.runLevel * 50;
+        run.runLevel += 1;
+        run.maxHp += 12;
+        run.hp = run.maxHp;
+        addLog(`Run level increased to ${run.runLevel}.`);
+      }
+
+      await updateFloorRecords(floor);
+      run.state = "reward";
+      await saveRun();
+      renderTower();
+    }
+
+    async function resolveSpecialChoice(choice) {
+      if (choice === "heal") {
+        run.hp = run.maxHp;
+        addLog("The sanctuary restored your HP.");
+      } else if (choice === "upgrade") {
+        addTemporaryUpgrade("Sharper Words");
+        addLog("Your words were sharpened by the sanctuary.");
+      } else if (choice === "event_power") {
+        addTemporaryUpgrade("Longform");
+        addLog("You learned to draw power from longer words.");
+      } else if (choice === "event_risk") {
+        run.hp = Math.max(1, run.hp - 15);
+        addRunRelic("quill_of_echoes");
+        addLog("You traded blood for a temporary relic.");
+      }
+
+      await updateFloorRecords(run.floor);
+      run.state = "reward";
+      await saveRun();
+      renderTower();
+    }
+
+    async function chooseReward(reward) {
+      if (reward === "relic") {
+        addRunRelic(pickRewardRelic());
+      } else if (reward === "skill") {
+        addSkill("Longform");
+      } else if (reward === "upgrade") {
+        addTemporaryUpgrade("Sharper Words");
+      }
+
+      run.floor += 1;
+      run.currentEncounter = createFloor(run.floor);
+      run.state = "floor";
+      addLog(`Ascended to floor ${run.floor}.`);
+      await saveRun();
+      renderTower();
+    }
+
+    async function updateFloorRecords(clearedFloor) {
+      const playerBest = Math.max(Number(player.towerBest || 1), clearedFloor);
+      const playerRecord = Math.max(Number(player.towerFloorRecord || 1), clearedFloor);
+      const worldRecord = Math.max(Number(world.tower?.floorRecord || 1), clearedFloor);
+
+      player.towerBest = playerBest;
+      player.towerFloorRecord = playerRecord;
+      world.tower = {
+        ...(world.tower || {}),
+        floorRecord: worldRecord,
+      };
+
+      await update(ref(db), {
+        [`${GAME_NAME}/Players/${nickname}/towerBest`]: playerBest,
+        [`${GAME_NAME}/Players/${nickname}/towerFloorRecord`]: playerRecord,
+        [`${GAME_NAME}/Worlds/${worldId}/tower/floorRecord`]: worldRecord,
+      });
+    }
+
+    async function endRunByDeath() {
+      addLog("Death reset the current climb.");
+      run.state = "dead";
+      await update(ref(db, `${GAME_NAME}/Players/${nickname}`), {
+        lastTowerDeath: serverTimestamp(),
+      });
+      await remove(ref(db, `${GAME_NAME}/Players/${nickname}/towerRun`));
+    }
+
+    async function startNewRun() {
+      run = createRun(player);
+      await saveRun();
+      renderTower();
+    }
+
+    async function saveRun() {
+      if (run.state === "dead") return;
+      await set(ref(db, `${GAME_NAME}/Players/${nickname}/towerRun`), {
+        ...run,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    function renderTower() {
+      renderRunStats();
+      renderBuild();
+      renderSavedAttacks();
+      renderLog();
+
+      const encounter = run.currentEncounter;
+      document.getElementById("towerFloorTitle").textContent = `Floor ${run.floor}`;
+      document.getElementById("floorTypeLabel").textContent = FLOOR_TYPES[encounter?.type] || "Tower Run";
+
+      showOnlyView(run.state === "dead" ? "deathView" : run.state === "reward" ? "rewardView" : isCombatFloor() ? "combatView" : "specialView");
+
+      if (run.state === "dead") return;
+      if (run.state === "reward") {
+        renderRewardChoices();
+      } else if (isCombatFloor()) {
+        renderCombat();
+      } else {
+        renderSpecialFloor();
+      }
+    }
+
+    function renderRunStats() {
+      document.getElementById("heroName").textContent = player.character.name;
+      document.getElementById("heroHpText").textContent = `${run.hp} / ${run.maxHp}`;
+      document.getElementById("heroHpBar").style.width = `${getPercent(run.hp, run.maxHp)}%`;
+      document.getElementById("heroLevelText").textContent = `Run level ${run.runLevel}`;
+      document.getElementById("runFloor").textContent = run.floor;
+      document.getElementById("runXp").textContent = run.xp;
+      document.getElementById("potionCount").textContent = run.potions;
+    }
+
+    function renderCombat() {
+      const enemy = run.currentEncounter.enemy;
+      document.getElementById("enemyName").textContent = enemy.name;
+      document.getElementById("enemyHpText").textContent = `${enemy.hp} / ${enemy.maxHp}`;
+      document.getElementById("enemyHpBar").style.width = `${getPercent(enemy.hp, enemy.maxHp)}%`;
+      document.getElementById("enemyIntent").textContent = `Intent: ${enemy.intent}`;
+    }
+
+    function renderSpecialFloor() {
+      const type = run.currentEncounter.type;
+      const isSanctuary = type === "sanctuary";
+      document.getElementById("specialType").textContent = FLOOR_TYPES[type];
+      document.getElementById("specialTitle").textContent = isSanctuary ? "A quiet light fills the floor" : "A strange door opens";
+      document.getElementById("specialText").textContent = isSanctuary
+        ? "Sanctuary floors can heal you or strengthen the rest of this climb."
+        : "Event floors offer choices. Some are safe, some are costly, and the build changes with them.";
+
+      const choices = isSanctuary
+        ? [
+            ["heal", "Restore HP"],
+            ["upgrade", "Gain Sharper Words"],
+          ]
+        : [
+            ["event_power", "Study the glyphs"],
+            ["event_risk", "Open the sealed chest"],
+          ];
+      renderChoices("specialChoices", choices, resolveSpecialChoice);
+    }
+
+    function renderRewardChoices() {
+      document.getElementById("rewardTitle").textContent = `Floor ${run.floor} cleared`;
+      renderChoices("rewardChoices", [
+        ["relic", "Take a relic"],
+        ["skill", "Learn a skill"],
+        ["upgrade", "Take a temporary upgrade"],
+      ], chooseReward);
+    }
+
+    function renderChoices(containerId, choices, handler) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = "";
+
+      choices.forEach(([value, label]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "loadout-item";
+        button.textContent = label;
+        button.addEventListener("click", () => handler(value));
+        container.appendChild(button);
+      });
+    }
+
+    function renderSavedAttacks() {
+      const container = document.getElementById("savedAttackButtons");
+      const savedAttacks = (player.character.savedAttacks || []).filter(Boolean);
+      container.innerHTML = "";
+
+      savedAttacks.forEach((attack) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary";
+        button.textContent = attack;
+        button.addEventListener("click", () => {
+          document.getElementById("attackWord").value = attack;
+        });
+        container.appendChild(button);
+      });
+    }
+
+    function renderBuild() {
+      renderList("runRelics", run.relics.map((relicId) => relicCatalog[relicId]?.name || relicId), "No run relics yet.");
+      renderList("runSkills", run.skills, "No skills yet.");
+      renderList("runEffects", [...run.temporaryUpgrades, ...run.effects], "No temporary effects yet.");
+    }
+
+    function renderList(id, values, emptyText) {
+      const list = document.getElementById(id);
+      list.innerHTML = "";
+      const items = values.length ? values : [emptyText];
+      items.forEach((value) => {
+        const item = document.createElement("li");
+        item.textContent = value;
+        list.appendChild(item);
+      });
+    }
+
+    function renderLog() {
+      const log = document.getElementById("towerLog");
+      log.innerHTML = "";
+      run.log.slice(-8).forEach((entry) => {
+        const item = document.createElement("li");
+        item.textContent = entry;
+        log.appendChild(item);
+      });
+    }
+
+    function showOnlyView(activeId) {
+      ["combatView", "specialView", "rewardView", "deathView"].forEach((id) => {
+        document.getElementById(id).classList.toggle("hidden", id !== activeId);
+      });
+    }
+
+    function isCombatFloor() {
+      return ["combat", "elite", "boss"].includes(run.currentEncounter?.type) && run.state === "floor";
+    }
+
+    function addRunRelic(relicId) {
+      if (!run.relics.includes(relicId)) {
+        run.relics.push(relicId);
+        addLog(`Gained run relic: ${relicCatalog[relicId]?.name || relicId}.`);
+      }
+    }
+
+    function addSkill(skill) {
+      if (!run.skills.includes(skill)) {
+        run.skills.push(skill);
+        addLog(`Learned skill: ${skill}.`);
+      }
+    }
+
+    function addTemporaryUpgrade(upgrade) {
+      if (!run.temporaryUpgrades.includes(upgrade)) {
+        run.temporaryUpgrades.push(upgrade);
+        addLog(`Gained temporary upgrade: ${upgrade}.`);
+      }
+    }
+
+    function pickRewardRelic() {
+      const relicIds = Object.keys(relicCatalog).filter((id) => !id.startsWith("_") && !run.relics.includes(id));
+      return relicIds[run.floor % relicIds.length] || "ember_charm";
+    }
+
+    function cleanAttackWord(value) {
+      const word = value.trim().replace(/[^a-zA-Z]/g, "");
+      return word || "Strike";
+    }
+
+    function addLog(entry) {
+      run.log = [...(run.log || []), entry].slice(-20);
+    }
+
+    function getPercent(value, max) {
+      return Math.max(0, Math.min(100, Math.round((value / max) * 100)));
+    }
+  </script>
+</body>
+
+</html>

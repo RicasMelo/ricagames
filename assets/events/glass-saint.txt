@@ -1,0 +1,20 @@
+Resource: assets/events/glass-saint.png
+
+What it is:
+- World event boss art for "The Glass Saint".
+
+Where it is used:
+- Main lobby world event panel.
+- Future event battle or event details screen.
+
+Recommended resolution:
+- 1024 x 1024 px
+
+Background:
+- Transparent preferred.
+
+Style notes:
+- Fragile/glass holy figure, boss-like silhouette.
+- Should read well on dark UI panels.
+- Keep transparent padding around the figure so glow/effects can be added in CSS.
+

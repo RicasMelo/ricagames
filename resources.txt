@@ -7,6 +7,9 @@ and whether each asset should use a transparent background.
 When you add a new visual feature, update this file first. It acts as the
 asset contract between the code and the art folders.
 
+Every expected PNG should have a matching TXT file beside it with the same base
+name. Example: main-lobby-tower.png uses main-lobby-tower.txt.
+
 
 Resources Missing
 -----------------

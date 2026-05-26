@@ -1,0 +1,21 @@
+Resource: assets/backgrounds/main-lobby-tower.png
+
+What it is:
+- Main illustrated tower/background image for the center stage of main-lobby.html.
+
+Where it is used:
+- Main lobby tower area.
+- Future replacement or enhancement for the current CSS-built tower.
+
+Recommended resolution:
+- 1600 x 1200 px
+
+Background:
+- Full image background, not transparent.
+- Should include sky/atmosphere behind the tower.
+
+Style notes:
+- Fantasy tower, readable at desktop and mobile sizes.
+- Keep the tower centered vertically with important details away from the extreme edges.
+- Avoid heavy text or UI-like symbols inside the image.
+

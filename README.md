@@ -22,6 +22,7 @@ http://127.0.0.1:8000/home.html
 - `character.html`: first-time character creation.
 - `main-lobby.html`: main world hub after selecting a world.
 - `customize-character.html`: player loadout page with character, relic, and Wordbook tabs.
+- `tower.html`: active tower climb with floor-by-floor combat and special floors.
 - `world.html`: world page.
 - `control.html`: admin/control page.
 
@@ -47,6 +48,34 @@ Important character fields:
 - `character.unlockedRelics`: relic IDs the player owns.
 - `character.equippedRelics`: up to 3 relic IDs currently equipped.
 - `character.savedAttacks`: 8 saved words for the Wordbook.
+- `towerFloorRecord`: current player floor record shown in the main lobby.
+- `towerBest`: highest floor reached by the current player.
+- `towerRun`: active temporary climb state. Removed when the player dies.
+
+World tower records live under:
+
+```text
+Game1/Worlds/{worldId}/tower/floorRecord
+```
+
+`main-lobby.html` normalizes missing tower records to `1` and keeps the world
+record at least as high as the current player's best floor.
+
+## Tower Runs
+
+Tower run state lives under:
+
+```text
+Game1/Players/{username}/towerRun
+```
+
+The run includes temporary fields such as `floor`, `runLevel`, `xp`, `hp`,
+`potions`, `relics`, `skills`, `temporaryUpgrades`, `effects`, and
+`currentEncounter`.
+
+Combat, sanctuary floors, event floors, elite floors, and boss floors are all
+generated from the current floor number. Death removes `towerRun`, so temporary
+run progress is lost while permanent records such as `towerBest` remain.
 
 ## JSON Catalogs
 

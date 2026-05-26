@@ -678,6 +678,84 @@ h2 {
   color: #ffb3b3;
 }
 
+.tower-run-shell {
+  width: min(1180px, 94vw);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 28px 0;
+}
+
+.tower-run-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(360px, 1.35fr) minmax(240px, 0.85fr);
+  gap: 16px;
+}
+
+.run-panel h3 {
+  margin: 18px 0 8px;
+}
+
+.encounter-panel {
+  min-height: 520px;
+}
+
+.combatant-card {
+  padding: 14px;
+  border: 1px solid #8f66ff33;
+  border-radius: 8px;
+  background: #171324;
+}
+
+.combatant-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.enemy-card {
+  margin-bottom: 18px;
+}
+
+.attack-book {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-attack-buttons,
+.tower-actions,
+.choice-list {
+  display: grid;
+  gap: 10px;
+}
+
+.saved-attack-buttons {
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+}
+
+.saved-attack-buttons button {
+  min-height: 46px;
+  margin: 0;
+  padding: 10px;
+}
+
+.tower-actions {
+  grid-template-columns: 1fr 1fr;
+  margin-top: 14px;
+}
+
+.choice-list {
+  margin-top: 16px;
+}
+
+.tower-log-panel {
+  margin-top: 16px;
+}
+
+#towerMessage {
+  min-height: 22px;
+  color: #ffb3b3;
+}
+
 @keyframes drift {
   from {
     transform: translateX(0);
@@ -717,7 +795,9 @@ h2 {
   }
 
   .loadout-grid,
-  .top-tabs {
+  .top-tabs,
+  .tower-run-grid,
+  .tower-actions {
     grid-template-columns: 1fr;
   }
 }

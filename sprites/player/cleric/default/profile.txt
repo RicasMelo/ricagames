@@ -1,0 +1,19 @@
+Resource: sprites/player/cleric/default/profile.png
+
+What it is:
+- Cleric default skin, profile portrait.
+
+Where it is used:
+- Menus.
+- Party/profile panels.
+- Character loadout UI.
+
+Expected resolution:
+- 96 x 96 px
+
+Background:
+- Transparent.
+
+Style notes:
+- Head/shoulders crop.
+- Face centered and readable at small UI size.

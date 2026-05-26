@@ -1,0 +1,21 @@
+Resource: assets/portraits/default-character.png
+
+What it is:
+- Fallback character portrait when a player has no specific profile sprite.
+
+Where it is used:
+- Character panels.
+- Loadout/customization screens.
+- Future player profile UI.
+
+Recommended resolution:
+- 512 x 512 px
+
+Background:
+- Transparent.
+
+Style notes:
+- Head and shoulders portrait.
+- Neutral enough to work for any class.
+- Face should be centered and readable at small sizes.
+

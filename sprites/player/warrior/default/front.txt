@@ -1,0 +1,21 @@
+Resource: sprites/player/warrior/default/front.png
+
+What it is:
+- Warrior default skin, front-facing player sprite.
+
+Where it is used:
+- Lobby.
+- Character customization.
+- Any scene where the warrior faces the camera.
+
+Expected resolution:
+- 128 x 128 px
+
+Background:
+- Transparent.
+
+Style notes:
+- Character centered.
+- Feet near bottom edge with 8-12 px padding.
+- Match scale and anchor position with back.png.
+

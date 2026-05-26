@@ -1,0 +1,20 @@
+Resource: assets/symbols/glowing-runes.png
+
+What it is:
+- Decorative glowing rune/symbol sheet or single rune cluster.
+
+Where it is used:
+- Main lobby tower stage.
+- Future magical effects around tower, events, or conditions.
+
+Recommended resolution:
+- 512 x 512 px
+
+Background:
+- Transparent.
+
+Style notes:
+- High readability on dark backgrounds.
+- Purple, white, blue, gold, or mixed magical tones are fine.
+- Avoid putting runes too close to the edge if this is a single image.
+

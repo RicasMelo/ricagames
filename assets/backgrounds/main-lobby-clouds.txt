@@ -1,0 +1,20 @@
+Resource: assets/backgrounds/main-lobby-clouds.png
+
+What it is:
+- Cloud layer for the main lobby background.
+
+Where it is used:
+- Main lobby tower area.
+- Can be layered over or behind the tower image.
+
+Recommended resolution:
+- 1600 x 800 px
+
+Background:
+- Transparent preferred.
+
+Style notes:
+- Soft fantasy clouds or mist.
+- Should tile or repeat gracefully if possible.
+- Keep contrast low so it does not fight with UI text.
+

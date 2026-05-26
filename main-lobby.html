@@ -71,25 +71,23 @@
 
       <section class="hub-panel tower-panel">
         <p class="eyebrow">Tower</p>
-        <h2>Ascension Gate</h2>
+        <h2>Word Tower</h2>
         <dl class="tower-stats">
           <div>
-            <dt>Current Floor Record</dt>
-            <dd id="floorRecord">143</dd>
+            <dt>Current World Floor Record</dt>
+            <dd id="worldFloorRecord">1</dd>
+          </div>
+          <div>
+            <dt>Current Player Floor Record</dt>
+            <dd id="playerFloorRecord">1</dd>
           </div>
           <div>
             <dt>Your Best</dt>
-            <dd id="playerBest">0</dd>
-          </div>
-          <div>
-            <dt>Ascension Level</dt>
-            <dd id="ascensionLevel">1</dd>
+            <dd id="playerBest">1</dd>
           </div>
         </dl>
         <div class="panel-actions">
-          <button type="button">Enter Tower</button>
-          <button type="button" class="secondary">Quick Run</button>
-          <button type="button" class="secondary">Ascension</button>
+          <button id="enterTowerBtn" type="button">Enter Tower</button>
         </div>
       </section>
     </section>
@@ -149,6 +147,9 @@
     document.getElementById("customizeBtn").addEventListener("click", () => {
       window.location.href = "customize-character.html";
     });
+    document.getElementById("enterTowerBtn").addEventListener("click", () => {
+      window.location.href = "tower.html";
+    });
 
     async function loadMainLobby() {
       try {
@@ -186,6 +187,7 @@
         }
 
         const normalizedPlayer = await normalizePlayerTitles(player);
+        await normalizeTowerData(normalizedPlayer, world);
         renderPlayer(normalizedPlayer);
         renderWorld(world);
         renderDailyStatus(new Date(), dailyConditions);
@@ -213,6 +215,41 @@
         [DEFAULT_TITLE_ID]: FALLBACK_TITLE,
         ...catalog,
       };
+    }
+
+    async function normalizeTowerData(player, world) {
+      const playerBest = Math.max(toFloorNumber(player.towerBest), toFloorNumber(player.towerFloor), 1);
+      const playerRecord = Math.max(toFloorNumber(player.towerFloorRecord), playerBest, 1);
+      const worldRecord = Math.max(toFloorNumber(world.tower?.floorRecord), playerBest, 1);
+      const updates = {};
+
+      if (toFloorNumber(world.tower?.floorRecord) !== worldRecord) {
+        updates[`${GAME_NAME}/Worlds/${worldId}/tower/floorRecord`] = worldRecord;
+      }
+
+      if (toFloorNumber(player.towerFloorRecord) !== playerRecord) {
+        updates[`${GAME_NAME}/Players/${nickname}/towerFloorRecord`] = playerRecord;
+      }
+
+      if (toFloorNumber(player.towerBest) !== playerBest) {
+        updates[`${GAME_NAME}/Players/${nickname}/towerBest`] = playerBest;
+      }
+
+      if (Object.keys(updates).length) {
+        await update(ref(db), updates);
+      }
+
+      world.tower = {
+        ...(world.tower || {}),
+        floorRecord: updates[`${GAME_NAME}/Worlds/${worldId}/tower/floorRecord`] || worldRecord,
+      };
+      player.towerFloorRecord = updates[`${GAME_NAME}/Players/${nickname}/towerFloorRecord`] || playerRecord;
+      player.towerBest = updates[`${GAME_NAME}/Players/${nickname}/towerBest`] || playerBest;
+    }
+
+    function toFloorNumber(value) {
+      const floor = Number(value);
+      return Number.isFinite(floor) && floor > 0 ? Math.floor(floor) : 0;
     }
 
     async function loadRelicCatalog() {
@@ -406,9 +443,10 @@
 
     function renderTower(player, world) {
       const tower = world.tower || {};
-      document.getElementById("floorRecord").textContent = tower.floorRecord || 143;
-      document.getElementById("playerBest").textContent = player.towerBest || player.towerFloor || 1;
-      document.getElementById("ascensionLevel").textContent = player.ascensionLevel || 1;
+      const playerBest = player.towerBest || player.towerFloor || 1;
+      document.getElementById("worldFloorRecord").textContent = tower.floorRecord || playerBest;
+      document.getElementById("playerFloorRecord").textContent = player.towerFloorRecord || playerBest;
+      document.getElementById("playerBest").textContent = playerBest;
     }
   </script>
 </body>
