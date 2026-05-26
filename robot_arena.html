@@ -468,7 +468,20 @@
       { id: "freeze", label: "Freeze pulse", color: "#51a7ff" },
       { id: "shield", label: "Shield recovery", color: "#4ed184" }
     ];
+    const robotSprite = new Image();
+    robotSprite.src = "robots/123.png";
+    const robotSpriteFrameCount = 8;
+    const robotSpriteFrameWidth = 24;
+    const robotSpriteFrameHeight = 16;
+    const robotSpriteScale = 4.35;
+    const robotSpriteOffsetX = 0;
+    const robotSpriteOffsetY = -8;
+    const tintedRobotSprites = new Map();
     const startingBotRadius = 24;
+    const debugTuning = {
+      showHitboxTrace: false,
+      hitboxToggleKey: "h"
+    };
     const movementTuning = {
       burstForceMultiplier: 3.05,
       burstDurationMin: 0.11,
@@ -490,12 +503,14 @@
       shieldDuration: 0,
       sizeBoostDuration: 5,
       sizeBoostAmount: 7,
+      sizeBoostVisualScaleAmount: 0.35,
       maxRobotSize: 37
     };
     const matchControlTuning = {
       startMultiplier: 0.6,
       turningPointAliveCount: 2,
-      turningPointMultiplier: 1.4
+      turningPointDelay: 15,
+      turningPointMultiplier: 1.3
     };
     const aiTuning = {
       centerMoveChance: 0.2
@@ -508,6 +523,7 @@
     let elapsed = 0;
     let matchControl = matchControlTuning.startMultiplier;
     let turningPointReached = false;
+    let twoRobotDuelTime = 0;
     let spawnTimer = 2.4;
     let started = false;
     let paused = false;
@@ -532,12 +548,66 @@
       feed.innerHTML = messages.map((message) => `<p>${message}</p>`).join("");
     }
 
+    function hexToRgb(hex) {
+      const value = hex.replace("#", "");
+      return {
+        r: parseInt(value.slice(0, 2), 16),
+        g: parseInt(value.slice(2, 4), 16),
+        b: parseInt(value.slice(4, 6), 16)
+      };
+    }
+
+    function getTintedRobotSprite(color) {
+      if (!robotSprite.complete || robotSprite.naturalWidth === 0) return null;
+      if (tintedRobotSprites.has(color)) return tintedRobotSprites.get(color);
+
+      const spriteCanvas = document.createElement("canvas");
+      spriteCanvas.width = robotSprite.width;
+      spriteCanvas.height = robotSprite.height;
+      const spriteCtx = spriteCanvas.getContext("2d");
+      spriteCtx.drawImage(robotSprite, 0, 0);
+
+      const imageData = spriteCtx.getImageData(0, 0, spriteCanvas.width, spriteCanvas.height);
+      const data = imageData.data;
+      const tint = hexToRgb(color);
+      const dark = { r: 17, g: 19, b: 24 };
+
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] === 0) continue;
+        const luminance = (data[i] + data[i + 1] + data[i + 2]) / (255 * 3);
+        const shade = Math.max(0, Math.min(1, luminance));
+        data[i] = dark.r + (tint.r - dark.r) * shade;
+        data[i + 1] = dark.g + (tint.g - dark.g) * shade;
+        data[i + 2] = dark.b + (tint.b - dark.b) * shade;
+      }
+
+      spriteCtx.putImageData(imageData, 0, 0);
+      tintedRobotSprites.set(color, spriteCanvas);
+      return spriteCanvas;
+    }
+
     function scaled(value) {
       return value * matchControl;
     }
 
     function isDangerPhase() {
       return turningPointReached;
+    }
+
+    function botWidth(bot) {
+      return bot.r * robotSpriteScale * bot.visualScale;
+    }
+
+    function botHeight(bot) {
+      return botWidth(bot) * (robotSpriteFrameHeight / robotSpriteFrameWidth);
+    }
+
+    function botHalfW(bot) {
+      return botWidth(bot) / 2;
+    }
+
+    function botHalfH(bot) {
+      return botHeight(bot) / 2;
     }
 
     function makeBot(name, trait, color, x, y, style) {
@@ -552,6 +622,8 @@
         angle: rand(0, TAU),
         r: startingBotRadius,
         baseR: startingBotRadius,
+        visualScale: 1,
+        baseVisualScale: 1,
         mass: startingBotRadius * startingBotRadius,
         accel: style.accel,
         maxSpeed: style.maxSpeed,
@@ -595,6 +667,7 @@
       elapsed = 0;
       matchControl = matchControlTuning.startMultiplier;
       turningPointReached = false;
+      twoRobotDuelTime = 0;
       spawnTimer = 1.2;
       started = false;
       paused = true;
@@ -752,6 +825,7 @@
       }
       if (power.id === "grow") {
         bot.r = Math.min(powerTuning.maxRobotSize, bot.r + scaled(powerTuning.sizeBoostAmount));
+        bot.visualScale += scaled(powerTuning.sizeBoostVisualScaleAmount);
         bot.mass = bot.r * bot.r;
         bot.sizeBoostTimer = scaled(powerTuning.sizeBoostDuration);
         bot.thrustCooldown *= movementTuning.sizeBoostCooldownMultiplier;
@@ -868,7 +942,12 @@
     function update(dt) {
       elapsed += dt;
       const aliveNow = bots.filter((bot) => bot.alive).length;
-      if (!turningPointReached && aliveNow <= matchControlTuning.turningPointAliveCount) {
+      if (!turningPointReached && aliveNow === matchControlTuning.turningPointAliveCount) {
+        twoRobotDuelTime += dt;
+      } else if (!turningPointReached) {
+        twoRobotDuelTime = 0;
+      }
+      if (!turningPointReached && twoRobotDuelTime >= matchControlTuning.turningPointDelay) {
         turningPointReached = true;
         matchControl = matchControlTuning.turningPointMultiplier;
         addFeed("Danger phase engaged.");
@@ -891,6 +970,7 @@
           bot.sizeBoostTimer = Math.max(0, bot.sizeBoostTimer - dt);
           if (bot.sizeBoostTimer === 0) {
             bot.r = bot.baseR;
+            bot.visualScale = bot.baseVisualScale;
             bot.mass = bot.r * bot.r;
           }
         }
@@ -1178,17 +1258,41 @@
 
       ctx.shadowColor = bot.color;
       ctx.shadowBlur = bot.speedBoost > 0 ? 24 : 10;
-      ctx.fillStyle = bot.color;
-      ctx.beginPath();
-      ctx.roundRect(-bot.r, -bot.r, bot.r * 2, bot.r * 2, 8);
-      ctx.fill();
+      const tintedSprite = getTintedRobotSprite(bot.color);
+      if (tintedSprite) {
+        const frameIndex = bot.frozen > 0 ? 0 : Math.floor(elapsed * 10 + bot.name.length) % robotSpriteFrameCount;
+        const spriteWidth = botWidth(bot);
+        const spriteHeight = botHeight(bot);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+          tintedSprite,
+          frameIndex * robotSpriteFrameWidth,
+          0,
+          robotSpriteFrameWidth,
+          robotSpriteFrameHeight,
+          -spriteWidth / 2 + robotSpriteOffsetX,
+          -spriteHeight / 2 + robotSpriteOffsetY,
+          spriteWidth,
+          spriteHeight
+        );
+        ctx.imageSmoothingEnabled = true;
+      } else {
+        ctx.fillStyle = bot.color;
+        ctx.beginPath();
+        ctx.roundRect(-bot.r, -bot.r, bot.r * 2, bot.r * 2, 8);
+        ctx.fill();
+      }
       ctx.shadowBlur = 0;
 
-      ctx.fillStyle = "rgba(17, 19, 24, 0.74)";
-      ctx.fillRect(-bot.r * 0.62, -bot.r * 0.42, bot.r * 1.24, bot.r * 0.38);
-      ctx.fillStyle = "#f4f0e8";
-      ctx.fillRect(bot.r * 0.2, -bot.r * 0.33, bot.r * 0.26, bot.r * 0.2);
-      ctx.fillRect(-bot.r * 0.46, -bot.r * 0.33, bot.r * 0.26, bot.r * 0.2);
+      if (debugTuning.showHitboxTrace) {
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.arc(0, 0, bot.r, 0, TAU);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
 
       ctx.restore();
 
@@ -1275,6 +1379,10 @@
     restartBtn.addEventListener("click", resetMatch);
     winnerRestartBtn.addEventListener("click", resetMatch);
     window.addEventListener("keydown", (event) => {
+      if (event.key.toLowerCase() === debugTuning.hitboxToggleKey) {
+        debugTuning.showHitboxTrace = !debugTuning.showHitboxTrace;
+        return;
+      }
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         if (matchOver) {
