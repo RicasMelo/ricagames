@@ -275,7 +275,7 @@
       justify-content: flex-start;
       gap: 6px;
       color: var(--muted);
-      font-size: 1.6rem;
+      font-size: var(--event-feed-text-size, 1.6rem);
       line-height: 1.18;
     }
 
@@ -287,8 +287,14 @@
     }
 
     .event-panel {
+      --event-feed-title-size: 1.3rem;
+      --event-feed-text-size: 1.3rem;
       width: min(var(--arena-side, 100%), 100%);
       justify-self: center;
+    }
+
+    .event-panel .eyebrow {
+      font-size: var(--event-feed-title-size);
     }
 
     .power-grid {
@@ -486,6 +492,11 @@
       sizeBoostAmount: 7,
       maxRobotSize: 37
     };
+    const matchControlTuning = {
+      startMultiplier: 0.6,
+      turningPointAliveCount: 2,
+      turningPointMultiplier: 1.4
+    };
     const aiTuning = {
       centerMoveChance: 0.2
     };
@@ -495,6 +506,8 @@
     let sparks = [];
     let messages = [];
     let elapsed = 0;
+    let matchControl = matchControlTuning.startMultiplier;
+    let turningPointReached = false;
     let spawnTimer = 2.4;
     let started = false;
     let paused = false;
@@ -517,6 +530,14 @@
       messages.unshift(text);
       messages = messages.slice(0, 6);
       feed.innerHTML = messages.map((message) => `<p>${message}</p>`).join("");
+    }
+
+    function scaled(value) {
+      return value * matchControl;
+    }
+
+    function isDangerPhase() {
+      return turningPointReached;
     }
 
     function makeBot(name, trait, color, x, y, style) {
@@ -572,6 +593,8 @@
       sparks = [];
       messages = [];
       elapsed = 0;
+      matchControl = matchControlTuning.startMultiplier;
+      turningPointReached = false;
       spawnTimer = 1.2;
       started = false;
       paused = true;
@@ -655,8 +678,8 @@
       if (bottom < margin) ay -= (margin - bottom) * 9 * bot.caution;
 
       if (bot.name === "Purple" && Math.random() < dt * 0.35 && target && dist(bot, target) < 130) {
-        bot.vx += rand(-170, 170);
-        bot.vy += rand(-170, 170);
+        bot.vx += rand(-170, 170) * matchControl;
+        bot.vy += rand(-170, 170) * matchControl;
       }
 
       bot.thrustCooldown -= dt;
@@ -696,12 +719,12 @@
         const forceMultiplier =
           (bot.speedBoost > 0 ? movementTuning.speedBoostForceMultiplier : 1) *
           (isBigger ? movementTuning.sizeBoostForceMultiplier : 1);
-        const pulse = bot.accel * bot.burstPower * movementTuning.burstForceMultiplier * forceMultiplier;
+        const pulse = scaled(bot.accel * bot.burstPower * movementTuning.burstForceMultiplier * forceMultiplier);
         bot.vx += bot.thrustX * pulse * dt;
         bot.vy += bot.thrustY * pulse * dt;
       }
 
-      const speedLimit = bot.maxSpeed * (bot.speedBoost > 0 ? 1.58 : 1);
+      const speedLimit = scaled(bot.maxSpeed * (bot.speedBoost > 0 ? 1.58 : 1));
       const speed = Math.hypot(bot.vx, bot.vy);
       if (speed > speedLimit) {
         bot.vx = (bot.vx / speed) * speedLimit;
@@ -723,14 +746,14 @@
 
     function collectPower(bot, power) {
       if (power.id === "speed") {
-        bot.speedBoost = powerTuning.speedBoostDuration;
+        bot.speedBoost = scaled(powerTuning.speedBoostDuration);
         bot.thrustCooldown *= movementTuning.speedBoostCooldownMultiplier;
         addFeed(`${bot.name} overclocks its drive.`);
       }
       if (power.id === "grow") {
-        bot.r = Math.min(powerTuning.maxRobotSize, bot.r + powerTuning.sizeBoostAmount);
+        bot.r = Math.min(powerTuning.maxRobotSize, bot.r + scaled(powerTuning.sizeBoostAmount));
         bot.mass = bot.r * bot.r;
-        bot.sizeBoostTimer = powerTuning.sizeBoostDuration;
+        bot.sizeBoostTimer = scaled(powerTuning.sizeBoostDuration);
         bot.thrustCooldown *= movementTuning.sizeBoostCooldownMultiplier;
         bot.thrustTime *= movementTuning.sizeBoostDurationMultiplier;
         addFeed(`${bot.name} gets heavier.`);
@@ -744,7 +767,7 @@
         addFeed(`${bot.name} phase-jumps.`);
       }
       if (power.id === "freeze") {
-        bot.frozen = powerTuning.freezeDuration;
+        bot.frozen = scaled(powerTuning.freezeDuration);
         bot.vx *= 0.12;
         bot.vy *= 0.12;
         addFeed(`${bot.name} is locked by the freeze trap.`);
@@ -844,10 +867,16 @@
 
     function update(dt) {
       elapsed += dt;
+      const aliveNow = bots.filter((bot) => bot.alive).length;
+      if (!turningPointReached && aliveNow <= matchControlTuning.turningPointAliveCount) {
+        turningPointReached = true;
+        matchControl = matchControlTuning.turningPointMultiplier;
+        addFeed("Danger phase engaged.");
+      }
       spawnTimer -= dt;
       if (spawnTimer <= 0 && powers.length < 4 && !matchOver) {
         spawnPower();
-        spawnTimer = rand(3.2, 5.8);
+        spawnTimer = rand(3.2, 5.8) / matchControl;
       }
 
       for (const bot of bots) {
@@ -956,7 +985,12 @@
       ctx.strokeStyle = "#ef4f5f";
       ctx.lineWidth = 4;
       ctx.setLineDash([16, 12]);
+      if (isDangerPhase()) {
+        ctx.shadowColor = "#ef4f5f";
+        ctx.shadowBlur = 18 + Math.sin(elapsed * 8) * 8;
+      }
       ctx.strokeRect(arena.x - 18, arena.y - 18, arena.w + 36, arena.h + 36);
+      ctx.shadowBlur = 0;
       ctx.setLineDash([]);
 
       const floor = ctx.createLinearGradient(arena.x, arena.y, arena.x + arena.w, arena.y + arena.h);
@@ -965,6 +999,29 @@
       floor.addColorStop(1, "#373239");
       ctx.fillStyle = floor;
       ctx.fillRect(arena.x, arena.y, arena.w, arena.h);
+
+      if (isDangerPhase()) {
+        const sirenPulse = 0.18 + Math.max(0, Math.sin(elapsed * 7)) * 0.24;
+        ctx.fillStyle = `rgba(239, 79, 95, ${sirenPulse})`;
+        ctx.fillRect(arena.x, arena.y, arena.w, arena.h);
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(arena.x, arena.y, arena.w, arena.h);
+        ctx.clip();
+        ctx.globalAlpha = 0.34 + Math.max(0, Math.sin(elapsed * 9)) * 0.22;
+        ctx.fillStyle = "#ef4f5f";
+        const sweep = (elapsed * 170) % (arena.w + 180);
+        for (let x = arena.x - arena.w; x < arena.x + arena.w * 2; x += 180) {
+          ctx.save();
+          ctx.translate(x + sweep, arena.y + arena.h / 2);
+          ctx.rotate(-Math.PI / 5);
+          ctx.fillRect(-20, -arena.h, 40, arena.h * 2);
+          ctx.restore();
+        }
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
 
       ctx.strokeStyle = "rgba(255,255,255,0.08)";
       ctx.lineWidth = 1;
@@ -981,7 +1038,7 @@
         ctx.stroke();
       }
 
-      ctx.strokeStyle = "#f4f0e8";
+      ctx.strokeStyle = isDangerPhase() ? "#ffb0b8" : "#f4f0e8";
       ctx.lineWidth = 5;
       ctx.strokeRect(arena.x, arena.y, arena.w, arena.h);
       ctx.restore();
