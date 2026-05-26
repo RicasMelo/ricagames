@@ -176,6 +176,35 @@
       display: none;
     }
 
+    .countdown-panel {
+      position: absolute;
+      inset: 0;
+      display: none;
+      place-items: center;
+      pointer-events: none;
+      text-align: center;
+    }
+
+    .countdown-panel.show {
+      display: grid;
+    }
+
+    .countdown-message {
+      color: var(--text);
+      font-size: var(--event-feed-text-size, 1.3rem);
+      font-weight: 900;
+      line-height: 1.05;
+      text-shadow: 0 0 18px rgba(0, 0, 0, 0.9), 0 0 24px rgba(245, 196, 81, 0.72);
+    }
+
+    .countdown-message span {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 0.74em;
+      font-weight: 800;
+    }
+
     .winner-card {
       width: min(390px, 100%);
       border: 1px solid rgba(255, 255, 255, 0.22);
@@ -368,6 +397,7 @@
         <h1>Robot Arena</h1>
       </div>
       <div class="top-actions">
+        <button id="soundBtn" type="button" class="secondary">Sound On</button>
         <button id="pauseBtn" type="button">Pause</button>
         <button id="restartBtn" type="button" class="secondary">Restart Match</button>
       </div>
@@ -380,6 +410,9 @@
           <div class="banner" id="banner">
             <strong>Four robots enter. One remains.</strong>
             <span>AI drivers ram, dodge, and shove opponents into the pit.</span>
+          </div>
+          <div class="countdown-panel" id="countdownPanel">
+            <div class="countdown-message" id="countdownMessage">Choose Your Robot</div>
           </div>
           <div class="start-panel" id="startPanel">
             <div class="winner-card">
@@ -450,12 +483,15 @@
     const roundTime = document.getElementById("roundTime");
     const powerCount = document.getElementById("powerCount");
     const banner = document.getElementById("banner");
+    const countdownPanel = document.getElementById("countdownPanel");
+    const countdownMessage = document.getElementById("countdownMessage");
     const startPanel = document.getElementById("startPanel");
     const startBtn = document.getElementById("startBtn");
     const winnerPanel = document.getElementById("winnerPanel");
     const winnerName = document.getElementById("winnerName");
     const winnerText = document.getElementById("winnerText");
     const winnerRestartBtn = document.getElementById("winnerRestartBtn");
+    const soundBtn = document.getElementById("soundBtn");
     const pauseBtn = document.getElementById("pauseBtn");
     const restartBtn = document.getElementById("restartBtn");
 
@@ -481,6 +517,10 @@
     const debugTuning = {
       showHitboxTrace: false,
       hitboxToggleKey: "h"
+    };
+    const soundTuning = {
+      enabled: true,
+      masterVolume: 0.28
     };
     const movementTuning = {
       burstForceMultiplier: 3.05,
@@ -528,7 +568,11 @@
     let started = false;
     let paused = false;
     let matchOver = false;
+    let countdownActive = false;
+    let countdownTimer = 0;
+    let countdownStep = "";
     let lastTime = performance.now();
+    let audioContext = null;
 
     function rand(min, max) {
       return min + Math.random() * (max - min);
@@ -547,6 +591,99 @@
       messages = messages.slice(0, 6);
       feed.innerHTML = messages.map((message) => `<p>${message}</p>`).join("");
     }
+
+    function ensureAudio() {
+      if (!soundTuning.enabled) return null;
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioContext.state === "suspended") audioContext.resume();
+      return audioContext;
+    }
+
+    function tone({ frequency = 220, endFrequency = frequency, duration = 0.15, type = "square", volume = 0.35, delay = 0 }) {
+      const audio = ensureAudio();
+      if (!audio) return;
+      const now = audio.currentTime + delay;
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, now);
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), now + duration);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(volume * soundTuning.masterVolume, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      oscillator.connect(gain);
+      gain.connect(audio.destination);
+      oscillator.start(now);
+      oscillator.stop(now + duration + 0.02);
+    }
+
+    function noise({ duration = 0.2, volume = 0.35, delay = 0, lowpass = 900 }) {
+      const audio = ensureAudio();
+      if (!audio) return;
+      const now = audio.currentTime + delay;
+      const buffer = audio.createBuffer(1, audio.sampleRate * duration, audio.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const source = audio.createBufferSource();
+      const filter = audio.createBiquadFilter();
+      const gain = audio.createGain();
+      source.buffer = buffer;
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(lowpass, now);
+      gain.gain.setValueAtTime(volume * soundTuning.masterVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(audio.destination);
+      source.start(now);
+      source.stop(now + duration);
+    }
+
+    const sounds = {
+      start() {
+        tone({ frequency: 180, endFrequency: 420, duration: 0.12, type: "sawtooth", volume: 0.35 });
+        tone({ frequency: 420, endFrequency: 760, duration: 0.14, type: "sawtooth", volume: 0.28, delay: 0.1 });
+      },
+      countdown(step) {
+        if (step === "GO") {
+          tone({ frequency: 520, endFrequency: 980, duration: 0.2, type: "sawtooth", volume: 0.42 });
+          return;
+        }
+        tone({ frequency: 420, endFrequency: 300, duration: 0.12, type: "square", volume: 0.32 });
+      },
+      collide(power = 1) {
+        tone({ frequency: 130 + power * 35, endFrequency: 70, duration: 0.08, type: "square", volume: 0.16 + power * 0.05 });
+      },
+      explode() {
+        noise({ duration: 0.45, volume: 0.72, lowpass: 650 });
+        tone({ frequency: 120, endFrequency: 35, duration: 0.38, type: "sawtooth", volume: 0.42 });
+      },
+      power(type) {
+        const map = {
+          speed: [440, 880],
+          grow: [170, 260],
+          teleport: [520, 1040],
+          freeze: [620, 240],
+          shield: [300, 520]
+        };
+        const [a, b] = map[type] || [320, 520];
+        tone({ frequency: a, endFrequency: b, duration: 0.16, type: "triangle", volume: 0.32 });
+      },
+      shieldSave() {
+        tone({ frequency: 260, endFrequency: 760, duration: 0.22, type: "triangle", volume: 0.36 });
+      },
+      danger() {
+        tone({ frequency: 220, endFrequency: 220, duration: 0.22, type: "sawtooth", volume: 0.45 });
+        tone({ frequency: 220, endFrequency: 220, duration: 0.22, type: "sawtooth", volume: 0.45, delay: 0.34 });
+      },
+      win() {
+        tone({ frequency: 330, endFrequency: 440, duration: 0.18, type: "triangle", volume: 0.32 });
+        tone({ frequency: 440, endFrequency: 660, duration: 0.2, type: "triangle", volume: 0.32, delay: 0.16 });
+        tone({ frequency: 660, endFrequency: 990, duration: 0.26, type: "triangle", volume: 0.34, delay: 0.34 });
+      }
+    };
 
     function hexToRgb(hex) {
       const value = hex.replace("#", "");
@@ -672,9 +809,13 @@
       started = false;
       paused = true;
       matchOver = false;
+      countdownActive = false;
+      countdownTimer = 0;
+      countdownStep = "";
       pauseBtn.textContent = "Pause";
       pauseBtn.disabled = true;
       startPanel.classList.remove("hidden");
+      countdownPanel.classList.remove("show");
       winnerPanel.classList.remove("show");
       banner.querySelector("strong").textContent = "Four robots enter. One remains.";
       banner.querySelector("span").textContent = "AI drivers ram, dodge, and shove opponents into the pit.";
@@ -687,11 +828,54 @@
     function startMatch() {
       if (started || matchOver) return;
       started = true;
-      paused = false;
-      pauseBtn.disabled = false;
+      paused = true;
+      countdownActive = true;
+      countdownTimer = 6.8;
+      countdownStep = "";
+      pauseBtn.disabled = true;
       startPanel.classList.add("hidden");
       banner.style.display = "none";
-      addFeed("Fight started.");
+      countdownPanel.classList.add("show");
+      countdownMessage.innerHTML = "Choose Your Robot";
+      sounds.start();
+    }
+
+    function updateCountdown(dt) {
+      if (!countdownActive) return;
+      countdownTimer = Math.max(0, countdownTimer - dt);
+
+      let nextStep = "";
+      let nextText = "";
+      if (countdownTimer > 3.8) {
+        nextStep = "choose";
+        nextText = "Choose Your Robot";
+      } else if (countdownTimer > 2.8) {
+        nextStep = "3";
+        nextText = "3";
+      } else if (countdownTimer > 1.8) {
+        nextStep = "2";
+        nextText = "2";
+      } else if (countdownTimer > 0.8) {
+        nextStep = "1";
+        nextText = "1";
+      } else if (countdownTimer > 0) {
+        nextStep = "GO";
+        nextText = "GO";
+      } else {
+        countdownActive = false;
+        paused = false;
+        pauseBtn.disabled = false;
+        countdownPanel.classList.remove("show");
+        banner.style.display = "none";
+        addFeed("Fight started.");
+        return;
+      }
+
+      if (nextStep !== countdownStep) {
+        countdownStep = nextStep;
+        countdownMessage.innerHTML = nextText;
+        if (["3", "2", "1", "GO"].includes(nextStep)) sounds.countdown(nextStep);
+      }
     }
 
     function nearestOpponent(bot) {
@@ -819,11 +1003,13 @@
 
     function collectPower(bot, power) {
       if (power.id === "speed") {
+        sounds.power(power.id);
         bot.speedBoost = scaled(powerTuning.speedBoostDuration);
         bot.thrustCooldown *= movementTuning.speedBoostCooldownMultiplier;
         addFeed(`${bot.name} overclocks its drive.`);
       }
       if (power.id === "grow") {
+        sounds.power(power.id);
         bot.r = Math.min(powerTuning.maxRobotSize, bot.r + scaled(powerTuning.sizeBoostAmount));
         bot.visualScale += scaled(powerTuning.sizeBoostVisualScaleAmount);
         bot.mass = bot.r * bot.r;
@@ -833,6 +1019,7 @@
         addFeed(`${bot.name} gets heavier.`);
       }
       if (power.id === "teleport") {
+        sounds.power(power.id);
         bot.x = rand(arena.x + 90, arena.x + arena.w - 90);
         bot.y = rand(arena.y + 90, arena.y + arena.h - 90);
         bot.vx *= 0.35;
@@ -841,12 +1028,14 @@
         addFeed(`${bot.name} phase-jumps.`);
       }
       if (power.id === "freeze") {
+        sounds.power(power.id);
         bot.frozen = scaled(powerTuning.freezeDuration);
         bot.vx *= 0.12;
         bot.vy *= 0.12;
         addFeed(`${bot.name} is locked by the freeze trap.`);
       }
       if (power.id === "shield") {
+        sounds.power(power.id);
         bot.shield = true;
         bot.shieldTimer = powerTuning.shieldDuration;
         addFeed(`${bot.name} activates a recovery shield.`);
@@ -905,6 +1094,7 @@
             b.vy += iy / b.mass;
             if (Math.abs(contactSpeed) > 95) {
               burst((a.x + b.x) / 2, (a.y + b.y) / 2, "#f4f0e8", 7);
+              sounds.collide(Math.min(3, Math.abs(contactSpeed) / 140));
             }
           }
         }
@@ -929,6 +1119,7 @@
         bot.vx *= -0.25;
         bot.vy *= -0.25;
         burst(bot.x, bot.y, "#4ed184", 30);
+        sounds.shieldSave();
         addFeed(`${bot.name}'s shield drags it back from the pit.`);
         return;
       }
@@ -936,6 +1127,7 @@
       bot.alive = false;
       bot.eliminatedAt = elapsed;
       burst(bot.x, bot.y, bot.color, 54);
+      sounds.explode();
       addFeed(`${bot.name} is knocked out of bounds.`);
     }
 
@@ -951,6 +1143,7 @@
         turningPointReached = true;
         matchControl = matchControlTuning.turningPointMultiplier;
         addFeed("Danger phase engaged.");
+        sounds.danger();
       }
       spawnTimer -= dt;
       if (spawnTimer <= 0 && powers.length < 4 && !matchOver) {
@@ -1041,6 +1234,7 @@
           winnerText.textContent = `${winner.name} is the last robot standing.`;
           winnerPanel.classList.add("show");
           addFeed(`${winner.name} is the last robot standing.`);
+          sounds.win();
         } else {
           banner.querySelector("strong").textContent = "Total arena wipeout.";
           banner.querySelector("span").textContent = "No robot survived the final collision.";
@@ -1048,6 +1242,7 @@
           winnerName.textContent = "No winner";
           winnerText.textContent = "Every robot went out in the final crash.";
           winnerPanel.classList.add("show");
+          sounds.explode();
         }
       } else if (!matchOver && elapsed > 4) {
         banner.style.display = "none";
@@ -1355,6 +1550,7 @@
     function loop(now) {
       const dt = Math.min(0.032, (now - lastTime) / 1000);
       lastTime = now;
+      if (countdownActive) updateCountdown(dt);
       if (started && !paused) update(dt);
       draw();
       updateHud();
@@ -1362,7 +1558,7 @@
     }
 
     pauseBtn.addEventListener("click", () => {
-      if (!started || matchOver) return;
+      if (!started || matchOver || countdownActive) return;
       paused = !paused;
       pauseBtn.textContent = paused ? "Resume" : "Pause";
       banner.style.display = paused ? "block" : banner.style.display;
@@ -1376,6 +1572,11 @@
     });
 
     startBtn.addEventListener("click", startMatch);
+    soundBtn.addEventListener("click", () => {
+      soundTuning.enabled = !soundTuning.enabled;
+      soundBtn.textContent = soundTuning.enabled ? "Sound On" : "Sound Off";
+      if (soundTuning.enabled) sounds.power("shield");
+    });
     restartBtn.addEventListener("click", resetMatch);
     winnerRestartBtn.addEventListener("click", resetMatch);
     window.addEventListener("keydown", (event) => {
