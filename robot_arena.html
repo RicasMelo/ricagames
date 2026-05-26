@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Robot Arena</title>
+  <style>
+    :root {
+      --bg: #111318;
+      --panel: #20252d;
+      --panel-2: #2b3037;
+      --line: #4a5059;
+      --text: #f4f0e8;
+      --muted: #b8bec8;
+      --red: #ef4f5f;
+      --blue: #51a7ff;
+      --green: #4ed184;
+      --yellow: #f5c451;
+      --violet: #a77cff;
+      --cyan: #48d5d9;
+      --orange: #f28f45;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0) 220px),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: #ece7db;
+      color: #111318;
+      border-radius: 6px;
+      min-height: 40px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    button.secondary {
+      background: transparent;
+      color: var(--text);
+    }
+
+    .arena-shell {
+      width: min(1180px, calc(100vw - 28px));
+      margin: 0 auto;
+      padding: 22px 0;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 4.6rem);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      color: var(--yellow);
+      font-size: 0.76rem;
+      font-weight: 900;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 310px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .arena-wrap {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #08090c;
+      min-height: 420px;
+      box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: min(74vh, 720px);
+      min-height: 420px;
+    }
+
+    .banner {
+      position: absolute;
+      left: 50%;
+      top: 18px;
+      transform: translateX(-50%);
+      min-width: min(460px, calc(100% - 32px));
+      padding: 10px 14px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 6px;
+      background: rgba(17, 19, 24, 0.82);
+      backdrop-filter: blur(10px);
+      text-align: center;
+      color: var(--text);
+      pointer-events: none;
+    }
+
+    .banner strong {
+      display: block;
+      font-size: 0.98rem;
+    }
+
+    .banner span {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .winner-panel {
+      position: absolute;
+      inset: 0;
+      display: none;
+      place-items: center;
+      padding: 20px;
+      background: rgba(8, 9, 12, 0.62);
+      backdrop-filter: blur(7px);
+    }
+
+    .winner-panel.show {
+      display: grid;
+    }
+
+    .start-panel {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(8, 9, 12, 0.44);
+      backdrop-filter: blur(4px);
+    }
+
+    .start-panel.hidden {
+      display: none;
+    }
+
+    .winner-card {
+      width: min(390px, 100%);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      border-radius: 8px;
+      background: rgba(32, 37, 45, 0.94);
+      padding: 22px;
+      text-align: center;
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.35);
+    }
+
+    .winner-card h2 {
+      margin: 0;
+      font-size: clamp(1.8rem, 5vw, 3rem);
+      line-height: 1;
+    }
+
+    .winner-card p {
+      margin: 8px 0 18px;
+      color: var(--muted);
+    }
+
+    .side {
+      display: grid;
+      gap: 12px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .score {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .stat {
+      border-radius: 6px;
+      background: var(--panel-2);
+      padding: 10px;
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 1.35rem;
+    }
+
+    .bot-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .bot-card {
+      display: grid;
+      grid-template-columns: 16px 1fr;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #171b21;
+    }
+
+    .bot-card.eliminated {
+      opacity: 0.48;
+    }
+
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+    }
+
+    .bot-name {
+      display: block;
+      font-weight: 900;
+    }
+
+    .feed {
+      height: 142px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .feed p {
+      margin: 0;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #171b21;
+    }
+
+    .power-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .power-chip {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 30px;
+    }
+
+    .power-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+    }
+
+    @media (max-width: 900px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .top-actions {
+        justify-content: flex-start;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .score {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      .arena-shell {
+        width: min(100vw - 18px, 1180px);
+        padding-top: 14px;
+      }
+
+      canvas,
+      .arena-wrap {
+        min-height: 360px;
+      }
+
+      button {
+        flex: 1 1 130px;
+      }
+
+      .score,
+      .power-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="arena-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Autonomous Combat Simulation</p>
+        <h1>Robot Arena</h1>
+      </div>
+      <div class="top-actions">
+        <button id="pauseBtn" type="button">Pause</button>
+        <button id="restartBtn" type="button" class="secondary">Restart Match</button>
+      </div>
+    </header>
+
+    <section class="layout">
+      <div class="arena-wrap">
+        <canvas id="arena" width="960" height="720" aria-label="Robot Arena battle simulation"></canvas>
+        <div class="banner" id="banner">
+          <strong>Four robots enter. One remains.</strong>
+          <span>AI drivers ram, dodge, and shove opponents into the pit.</span>
+        </div>
+        <div class="start-panel" id="startPanel">
+          <div class="winner-card">
+            <p class="eyebrow">Ready</p>
+            <h2>Robot Arena</h2>
+            <p>Press Start, Enter, or Space to begin the fight.</p>
+            <button id="startBtn" type="button" autofocus>Start Fight</button>
+          </div>
+        </div>
+        <div class="winner-panel" id="winnerPanel" aria-live="polite">
+          <div class="winner-card">
+            <p class="eyebrow">Winner</p>
+            <h2 id="winnerName">Robot</h2>
+            <p id="winnerText">Last robot standing.</p>
+            <button id="winnerRestartBtn" type="button">Restart Match</button>
+          </div>
+        </div>
+      </div>
+
+      <aside class="side">
+        <section class="panel score">
+          <div class="stat">
+            <span>Alive</span>
+            <strong id="aliveCount">4</strong>
+          </div>
+          <div class="stat">
+            <span>Round</span>
+            <strong id="roundTime">0:00</strong>
+          </div>
+          <div class="stat">
+            <span>Power</span>
+            <strong id="powerCount">0</strong>
+          </div>
+        </section>
+
+        <section class="panel">
+          <p class="eyebrow">Combatants</p>
+          <div class="bot-list" id="botList"></div>
+        </section>
+
+        <section class="panel">
+          <p class="eyebrow">Power-Ups</p>
+          <div class="power-grid">
+            <div class="power-chip"><span class="power-dot" style="background: var(--cyan);"></span> Speed boost</div>
+            <div class="power-chip"><span class="power-dot" style="background: var(--yellow);"></span> Resize</div>
+            <div class="power-chip"><span class="power-dot" style="background: var(--violet);"></span> Teleport</div>
+            <div class="power-chip"><span class="power-dot" style="background: var(--blue);"></span> Freeze</div>
+            <div class="power-chip"><span class="power-dot" style="background: var(--green);"></span> Shield recovery
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <p class="eyebrow">Event Feed</p>
+          <div class="feed" id="feed"></div>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("arena");
+    const ctx = canvas.getContext("2d");
+    const botList = document.getElementById("botList");
+    const feed = document.getElementById("feed");
+    const aliveCount = document.getElementById("aliveCount");
+    const roundTime = document.getElementById("roundTime");
+    const powerCount = document.getElementById("powerCount");
+    const banner = document.getElementById("banner");
+    const startPanel = document.getElementById("startPanel");
+    const startBtn = document.getElementById("startBtn");
+    const winnerPanel = document.getElementById("winnerPanel");
+    const winnerName = document.getElementById("winnerName");
+    const winnerText = document.getElementById("winnerText");
+    const winnerRestartBtn = document.getElementById("winnerRestartBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const restartBtn = document.getElementById("restartBtn");
+
+    const TAU = Math.PI * 2;
+    const arena = { x: 100, y: 78, w: 760, h: 548 };
+    const powerTypes = [
+      { id: "speed", label: "Speed boost", color: "#48d5d9" },
+      { id: "grow", label: "Size increase", color: "#f5c451" },
+      { id: "shrink", label: "Size decrease", color: "#f28f45" },
+      { id: "teleport", label: "Teleportation", color: "#a77cff" },
+      { id: "freeze", label: "Freeze pulse", color: "#51a7ff" },
+      { id: "shield", label: "Shield recovery", color: "#4ed184" }
+    ];
+    const startingBotRadius = 24;
+    const movementTuning = {
+      burstForceMultiplier: 3.05,
+      burstDurationMin: 0.11,
+      burstDurationMax: 0.21,
+      burstCooldownMin: 0.62,
+      burstCooldownMax: 1.18,
+      speedBoostCooldownMultiplier: 0.1,
+      speedBoostDurationMultiplier: 0.5,
+      startingCooldownMin: 0.12,
+      startingCooldownMax: 0.85
+    };
+
+    let bots = [];
+    let powers = [];
+    let sparks = [];
+    let messages = [];
+    let elapsed = 0;
+    let spawnTimer = 2.4;
+    let started = false;
+    let paused = false;
+    let matchOver = false;
+    let lastTime = performance.now();
+
+    function rand(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function dist(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function addFeed(text) {
+      messages.push(text);
+      messages = messages.slice(-6);
+      feed.innerHTML = messages.map((message) => `<p>${message}</p>`).join("");
+    }
+
+    function makeBot(name, trait, color, x, y, style) {
+      return {
+        name,
+        trait,
+        color,
+        x,
+        y,
+        vx: rand(-40, 40),
+        vy: rand(-40, 40),
+        angle: rand(0, TAU),
+        r: startingBotRadius,
+        baseR: startingBotRadius,
+        mass: startingBotRadius * startingBotRadius,
+        accel: style.accel,
+        maxSpeed: style.maxSpeed,
+        burstPower: style.burstPower,
+        thrustCooldown: rand(movementTuning.startingCooldownMin, movementTuning.startingCooldownMax),
+        thrustTime: 0,
+        thrustX: 0,
+        thrustY: 0,
+        aggression: style.aggression,
+        caution: style.caution,
+        alive: true,
+        indestructible: false,
+        shield: false,
+        frozen: 0,
+        speedBoost: 0,
+        sizeTimer: 0,
+        eliminatedAt: 0,
+        spin: rand(-2, 2)
+      };
+    }
+
+    function resetMatch() {
+      bots = [
+        makeBot("Red", "Heavy rammer", "#ef4f5f", arena.x + 150, arena.y + 120, {
+          accel: 350, maxSpeed: 220, burstPower: 1.14, aggression: 1.18, caution: 0.75
+        }),
+        makeBot("Cyan", "Fast hunter", "#48d5d9", arena.x + arena.w - 150, arena.y + 120, {
+          accel: 455, maxSpeed: 280, burstPower: 0.98, aggression: 1.04, caution: 1.0
+        }),
+        makeBot("Yellow", "Center bully", "#f5c451", arena.x + 155, arena.y + arena.h - 120, {
+          accel: 300, maxSpeed: 195, burstPower: 1.04, aggression: 0.92, caution: 1.28
+        }),
+        makeBot("Purple", "Trickster", "#a77cff", arena.x + arena.w - 155, arena.y + arena.h - 120, {
+          accel: 390, maxSpeed: 245, burstPower: 0.94, aggression: 0.86, caution: 1.05
+        })
+      ];
+      powers = [];
+      sparks = [];
+      messages = [];
+      elapsed = 0;
+      spawnTimer = 1.2;
+      started = false;
+      paused = true;
+      matchOver = false;
+      pauseBtn.textContent = "Pause";
+      pauseBtn.disabled = true;
+      startPanel.classList.remove("hidden");
+      winnerPanel.classList.remove("show");
+      banner.querySelector("strong").textContent = "Four robots enter. One remains.";
+      banner.querySelector("span").textContent = "AI drivers ram, dodge, and shove opponents into the pit.";
+      banner.style.display = "block";
+      addFeed("Match armed. Arena doors sealed.");
+      updateHud();
+      setTimeout(() => startBtn.focus(), 0);
+    }
+
+    function startMatch() {
+      if (started || matchOver) return;
+      started = true;
+      paused = false;
+      pauseBtn.disabled = false;
+      startPanel.classList.add("hidden");
+      banner.querySelector("strong").textContent = "Fight started.";
+      banner.querySelector("span").textContent = "The robots are now hunting for ring-outs.";
+      banner.style.display = "block";
+      addFeed("Fight started.");
+    }
+
+    function nearestOpponent(bot) {
+      let best = null;
+      let bestScore = Infinity;
+      for (const other of bots) {
+        if (other === bot || !other.alive) continue;
+        const d = dist(bot, other) - other.r;
+        const edgeRisk = Math.min(
+          other.x - arena.x,
+          arena.x + arena.w - other.x,
+          other.y - arena.y,
+          arena.y + arena.h - other.y
+        );
+        const score = d - (85 - edgeRisk) * bot.aggression;
+        if (score < bestScore) {
+          bestScore = score;
+          best = other;
+        }
+      }
+      return best;
+    }
+
+    function applyBotAI(bot, dt) {
+      if (!bot.alive || bot.frozen > 0) return;
+      const target = nearestOpponent(bot);
+      let ax = 0;
+      let ay = 0;
+
+      if (target) {
+        const dx = target.x - bot.x;
+        const dy = target.y - bot.y;
+        const len = Math.hypot(dx, dy) || 1;
+        ax += (dx / len) * bot.accel * bot.aggression;
+        ay += (dy / len) * bot.accel * bot.aggression;
+
+        const targetEdge = Math.min(
+          target.x - arena.x,
+          arena.x + arena.w - target.x,
+          target.y - arena.y,
+          arena.y + arena.h - target.y
+        );
+        if (targetEdge < 90) {
+          ax += (dx / len) * bot.accel * 0.7;
+          ay += (dy / len) * bot.accel * 0.7;
+        }
+      }
+
+      const margin = 78 + bot.r;
+      const left = bot.x - arena.x;
+      const right = arena.x + arena.w - bot.x;
+      const top = bot.y - arena.y;
+      const bottom = arena.y + arena.h - bot.y;
+      if (left < margin) ax += (margin - left) * 9 * bot.caution;
+      if (right < margin) ax -= (margin - right) * 9 * bot.caution;
+      if (top < margin) ay += (margin - top) * 9 * bot.caution;
+      if (bottom < margin) ay -= (margin - bottom) * 9 * bot.caution;
+
+      if (bot.name === "Purple" && Math.random() < dt * 0.35 && target && dist(bot, target) < 130) {
+        bot.vx += rand(-170, 170);
+        bot.vy += rand(-170, 170);
+      }
+
+      bot.thrustCooldown -= dt;
+      bot.thrustTime = Math.max(0, bot.thrustTime - dt);
+      if (bot.thrustCooldown <= 0 && bot.thrustTime === 0) {
+        const len = Math.hypot(ax, ay) || 1;
+        const cooldownMultiplier = bot.speedBoost > 0 ? movementTuning.speedBoostCooldownMultiplier : 1;
+        const durationMultiplier = bot.speedBoost > 0 ? movementTuning.speedBoostDurationMultiplier : 1;
+        bot.thrustX = ax / len;
+        bot.thrustY = ay / len;
+        bot.thrustTime = rand(
+          movementTuning.burstDurationMin * durationMultiplier,
+          movementTuning.burstDurationMax * durationMultiplier
+        );
+        bot.thrustCooldown = rand(
+          movementTuning.burstCooldownMin * cooldownMultiplier,
+          movementTuning.burstCooldownMax * cooldownMultiplier
+        );
+      }
+
+      if (bot.thrustTime > 0) {
+        const pulse = bot.accel * bot.burstPower * movementTuning.burstForceMultiplier;
+        bot.vx += bot.thrustX * pulse * dt;
+        bot.vy += bot.thrustY * pulse * dt;
+      }
+
+      const speedLimit = bot.maxSpeed * (bot.speedBoost > 0 ? 1.58 : 1);
+      const speed = Math.hypot(bot.vx, bot.vy);
+      if (speed > speedLimit) {
+        bot.vx = (bot.vx / speed) * speedLimit;
+        bot.vy = (bot.vy / speed) * speedLimit;
+      }
+    }
+
+    function spawnPower() {
+      const type = powerTypes[Math.floor(Math.random() * powerTypes.length)];
+      powers.push({
+        ...type,
+        x: rand(arena.x + 70, arena.x + arena.w - 70),
+        y: rand(arena.y + 70, arena.y + arena.h - 70),
+        r: 15,
+        life: 12,
+        pulse: rand(0, TAU)
+      });
+      addFeed(`${type.label} dropped into the arena.`);
+    }
+
+    function collectPower(bot, power) {
+      if (power.id === "speed") {
+        bot.speedBoost = 5.6;
+        bot.thrustCooldown *= movementTuning.speedBoostCooldownMultiplier;
+        addFeed(`${bot.name} overclocks its drive.`);
+      }
+      if (power.id === "grow") {
+        bot.r = Math.min(37, bot.r + 7);
+        bot.mass = bot.r * bot.r;
+        bot.sizeTimer = 7.5;
+        addFeed(`${bot.name} gets heavier.`);
+      }
+      if (power.id === "shrink") {
+        bot.r = Math.max(14, bot.r - 6);
+        bot.mass = bot.r * bot.r;
+        bot.sizeTimer = 7.5;
+        addFeed(`${bot.name} slips into compact mode.`);
+      }
+      if (power.id === "teleport") {
+        bot.x = rand(arena.x + 90, arena.x + arena.w - 90);
+        bot.y = rand(arena.y + 90, arena.y + arena.h - 90);
+        bot.vx *= 0.35;
+        bot.vy *= 0.35;
+        burst(bot.x, bot.y, power.color, 24);
+        addFeed(`${bot.name} phase-jumps.`);
+      }
+      if (power.id === "freeze") {
+        bot.frozen = 2.4;
+        bot.vx *= 0.12;
+        bot.vy *= 0.12;
+        addFeed(`${bot.name} is locked by the freeze trap.`);
+      }
+      if (power.id === "shield") {
+        bot.shield = true;
+        addFeed(`${bot.name} activates a recovery shield.`);
+      }
+    }
+
+    function burst(x, y, color, count) {
+      for (let i = 0; i < count; i++) {
+        const a = rand(0, TAU);
+        const speed = rand(80, 360);
+        sparks.push({
+          x,
+          y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          life: rand(0.35, 0.9),
+          maxLife: 0.9,
+          color,
+          size: rand(2, 6)
+        });
+      }
+    }
+
+    function resolveCollisions() {
+      for (let i = 0; i < bots.length; i++) {
+        const a = bots[i];
+        if (!a.alive) continue;
+        for (let j = i + 1; j < bots.length; j++) {
+          const b = bots[j];
+          if (!b.alive) continue;
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const minDist = a.r + b.r;
+          const d = Math.hypot(dx, dy) || 1;
+          if (d >= minDist) continue;
+
+          const nx = dx / d;
+          const ny = dy / d;
+          const overlap = minDist - d;
+          const totalMass = a.mass + b.mass;
+          a.x -= nx * overlap * (b.mass / totalMass);
+          a.y -= ny * overlap * (b.mass / totalMass);
+          b.x += nx * overlap * (a.mass / totalMass);
+          b.y += ny * overlap * (a.mass / totalMass);
+
+          const rvx = b.vx - a.vx;
+          const rvy = b.vy - a.vy;
+          const contactSpeed = rvx * nx + rvy * ny;
+          if (contactSpeed < 0) {
+            const impulse = -(1.28 * contactSpeed) / (1 / a.mass + 1 / b.mass);
+            const ix = impulse * nx;
+            const iy = impulse * ny;
+            a.vx -= ix / a.mass;
+            a.vy -= iy / a.mass;
+            b.vx += ix / b.mass;
+            b.vy += iy / b.mass;
+            if (Math.abs(contactSpeed) > 95) {
+              burst((a.x + b.x) / 2, (a.y + b.y) / 2, "#f4f0e8", 7);
+            }
+          }
+        }
+      }
+    }
+
+    function eliminate(bot) {
+      if (bot.indestructible) {
+        bot.x = clamp(bot.x, arena.x + bot.r + 8, arena.x + arena.w - bot.r - 8);
+        bot.y = clamp(bot.y, arena.y + bot.r + 8, arena.y + arena.h - bot.r - 8);
+        bot.vx *= -0.45;
+        bot.vy *= -0.45;
+        burst(bot.x, bot.y, "#f5c451", 18);
+        return;
+      }
+
+      if (bot.shield) {
+        bot.shield = false;
+        bot.x = arena.x + arena.w / 2 + rand(-75, 75);
+        bot.y = arena.y + arena.h / 2 + rand(-75, 75);
+        bot.vx *= -0.25;
+        bot.vy *= -0.25;
+        burst(bot.x, bot.y, "#4ed184", 30);
+        addFeed(`${bot.name}'s shield drags it back from the pit.`);
+        return;
+      }
+
+      bot.alive = false;
+      bot.eliminatedAt = elapsed;
+      burst(bot.x, bot.y, bot.color, 54);
+      addFeed(`${bot.name} is knocked out of bounds.`);
+    }
+
+    function update(dt) {
+      elapsed += dt;
+      spawnTimer -= dt;
+      if (spawnTimer <= 0 && powers.length < 4 && !matchOver) {
+        spawnPower();
+        spawnTimer = rand(3.2, 5.8);
+      }
+
+      for (const bot of bots) {
+        if (!bot.alive) continue;
+        bot.frozen = Math.max(0, bot.frozen - dt);
+        bot.speedBoost = Math.max(0, bot.speedBoost - dt);
+        bot.sizeTimer = Math.max(0, bot.sizeTimer - dt);
+        if (bot.sizeTimer === 0 && bot.r !== bot.baseR) {
+          bot.r += (bot.baseR - bot.r) * Math.min(1, dt * 4);
+          if (Math.abs(bot.r - bot.baseR) < 0.25) bot.r = bot.baseR;
+          bot.mass = bot.r * bot.r;
+        }
+        applyBotAI(bot, dt);
+      }
+
+      for (const bot of bots) {
+        if (!bot.alive) continue;
+        if (bot.frozen > 0) continue;
+        bot.x += bot.vx * dt;
+        bot.y += bot.vy * dt;
+        bot.vx *= Math.pow(0.994, dt * 60);
+        bot.vy *= Math.pow(0.994, dt * 60);
+        bot.angle += (bot.vx * 0.008 + bot.spin) * dt;
+      }
+
+      resolveCollisions();
+
+      const survivorsBeforeBounds = bots.filter((bot) => bot.alive);
+      if (survivorsBeforeBounds.length === 1) {
+        survivorsBeforeBounds[0].indestructible = true;
+      }
+
+      for (const bot of bots) {
+        if (!bot.alive) continue;
+        const outside = bot.x - bot.r < arena.x || bot.x + bot.r > arena.x + arena.w ||
+          bot.y - bot.r < arena.y || bot.y + bot.r > arena.y + arena.h;
+        if (outside) eliminate(bot);
+      }
+
+      for (let i = powers.length - 1; i >= 0; i--) {
+        const power = powers[i];
+        power.life -= dt;
+        power.pulse += dt * 4;
+        if (power.life <= 0) {
+          powers.splice(i, 1);
+          continue;
+        }
+        for (const bot of bots) {
+          if (bot.alive && dist(bot, power) < bot.r + power.r) {
+            collectPower(bot, power);
+            powers.splice(i, 1);
+            break;
+          }
+        }
+      }
+
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const spark = sparks[i];
+        spark.life -= dt;
+        spark.x += spark.vx * dt;
+        spark.y += spark.vy * dt;
+        spark.vx *= Math.pow(0.94, dt * 60);
+        spark.vy *= Math.pow(0.94, dt * 60);
+        if (spark.life <= 0) sparks.splice(i, 1);
+      }
+
+      const alive = bots.filter((bot) => bot.alive);
+      if (alive.length <= 1 && !matchOver) {
+        matchOver = true;
+        const winner = alive[0];
+        if (winner) {
+          winner.indestructible = true;
+          banner.querySelector("strong").textContent = `${winner.name} wins the arena.`;
+          banner.querySelector("span").textContent = "Restart the match to watch a new AI brawl.";
+          banner.style.display = "block";
+          winnerName.textContent = winner.name;
+          winnerText.textContent = `${winner.name} is the last robot standing.`;
+          winnerPanel.classList.add("show");
+          addFeed(`${winner.name} is the last robot standing.`);
+        } else {
+          banner.querySelector("strong").textContent = "Total arena wipeout.";
+          banner.querySelector("span").textContent = "No robot survived the final collision.";
+          banner.style.display = "block";
+          winnerName.textContent = "No winner";
+          winnerText.textContent = "Every robot went out in the final crash.";
+          winnerPanel.classList.add("show");
+        }
+      } else if (!matchOver && elapsed > 4) {
+        banner.style.display = "none";
+      }
+    }
+
+    function drawArena() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#08090c";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.fillStyle = "#15191f";
+      ctx.fillRect(arena.x - 62, arena.y - 62, arena.w + 124, arena.h + 124);
+      ctx.strokeStyle = "#ef4f5f";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([16, 12]);
+      ctx.strokeRect(arena.x - 18, arena.y - 18, arena.w + 36, arena.h + 36);
+      ctx.setLineDash([]);
+
+      const floor = ctx.createLinearGradient(arena.x, arena.y, arena.x + arena.w, arena.y + arena.h);
+      floor.addColorStop(0, "#30363d");
+      floor.addColorStop(0.5, "#22272f");
+      floor.addColorStop(1, "#373239");
+      ctx.fillStyle = floor;
+      ctx.fillRect(arena.x, arena.y, arena.w, arena.h);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      for (let x = arena.x + 40; x < arena.x + arena.w; x += 40) {
+        ctx.beginPath();
+        ctx.moveTo(x, arena.y);
+        ctx.lineTo(x, arena.y + arena.h);
+        ctx.stroke();
+      }
+      for (let y = arena.y + 40; y < arena.y + arena.h; y += 40) {
+        ctx.beginPath();
+        ctx.moveTo(arena.x, y);
+        ctx.lineTo(arena.x + arena.w, y);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = "#f4f0e8";
+      ctx.lineWidth = 5;
+      ctx.strokeRect(arena.x, arena.y, arena.w, arena.h);
+      ctx.restore();
+    }
+
+    function drawPower(power) {
+      const pulse = Math.sin(power.pulse) * 3;
+      ctx.save();
+      ctx.translate(power.x, power.y);
+      ctx.shadowColor = power.color;
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = power.color;
+      ctx.beginPath();
+      ctx.roundRect(-power.r - pulse, -power.r - pulse, (power.r + pulse) * 2, (power.r + pulse) * 2, 5);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#111318";
+      drawPowerIcon(power.id);
+      ctx.restore();
+    }
+
+    function drawPowerIcon(type) {
+      ctx.save();
+      ctx.strokeStyle = "#111318";
+      ctx.fillStyle = "#111318";
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+
+      if (type === "speed") {
+        ctx.beginPath();
+        ctx.moveTo(-7, 7);
+        ctx.lineTo(0, -8);
+        ctx.lineTo(3, -1);
+        ctx.lineTo(8, -1);
+        ctx.lineTo(0, 9);
+        ctx.lineTo(1, 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      if (type === "grow") {
+        ctx.strokeRect(-7, -7, 14, 14);
+        ctx.beginPath();
+        ctx.moveTo(-2, -7);
+        ctx.lineTo(-7, -7);
+        ctx.lineTo(-7, -2);
+        ctx.moveTo(2, 7);
+        ctx.lineTo(7, 7);
+        ctx.lineTo(7, 2);
+        ctx.stroke();
+      }
+
+      if (type === "shrink") {
+        ctx.strokeRect(-7, -7, 14, 14);
+        ctx.beginPath();
+        ctx.moveTo(-7, -2);
+        ctx.lineTo(-2, -2);
+        ctx.lineTo(-2, -7);
+        ctx.moveTo(7, 2);
+        ctx.lineTo(2, 2);
+        ctx.lineTo(2, 7);
+        ctx.stroke();
+      }
+
+      if (type === "teleport") {
+        ctx.beginPath();
+        ctx.arc(-3, 0, 6, Math.PI * 0.35, Math.PI * 1.65);
+        ctx.arc(5, 0, 6, Math.PI * 1.35, Math.PI * 0.65, true);
+        ctx.stroke();
+      }
+
+      if (type === "freeze") {
+        for (let i = 0; i < 3; i++) {
+          ctx.rotate(TAU / 3);
+          ctx.beginPath();
+          ctx.moveTo(0, -9);
+          ctx.lineTo(0, 9);
+          ctx.moveTo(-4, -5);
+          ctx.lineTo(0, -9);
+          ctx.lineTo(4, -5);
+          ctx.moveTo(-4, 5);
+          ctx.lineTo(0, 9);
+          ctx.lineTo(4, 5);
+          ctx.stroke();
+        }
+      }
+
+      if (type === "shield") {
+        ctx.beginPath();
+        ctx.moveTo(0, -9);
+        ctx.lineTo(8, -5);
+        ctx.lineTo(6, 5);
+        ctx.lineTo(0, 10);
+        ctx.lineTo(-6, 5);
+        ctx.lineTo(-8, -5);
+        ctx.closePath();
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawBot(bot) {
+      if (!bot.alive) return;
+      ctx.save();
+      ctx.translate(bot.x, bot.y);
+      ctx.rotate(bot.angle);
+
+      if (bot.thrustTime > 0 && bot.frozen === 0) {
+        const localThrust = Math.atan2(bot.thrustY, bot.thrustX) - bot.angle;
+        ctx.save();
+        ctx.rotate(localThrust);
+        ctx.fillStyle = bot.speedBoost > 0 ? "#48d5d9" : "#f28f45";
+        ctx.globalAlpha = 0.72;
+        ctx.beginPath();
+        ctx.moveTo(-bot.r - 9 - rand(0, 6), 0);
+        ctx.lineTo(-bot.r * 0.42, -bot.r * 0.32);
+        ctx.lineTo(-bot.r * 0.42, bot.r * 0.32);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
+
+      if (bot.indestructible) {
+        ctx.strokeStyle = "rgba(245, 196, 81, 0.95)";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(0, 0, bot.r + 12, 0, TAU);
+        ctx.stroke();
+      }
+
+      if (bot.shield) {
+        ctx.strokeStyle = "rgba(78, 209, 132, 0.86)";
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(0, 0, bot.r + 9, 0, TAU);
+        ctx.stroke();
+      }
+
+      if (bot.frozen > 0) {
+        ctx.strokeStyle = "rgba(81, 167, 255, 0.9)";
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(0, 0, bot.r + 5, 0, TAU);
+        ctx.stroke();
+      }
+
+      ctx.shadowColor = bot.color;
+      ctx.shadowBlur = bot.speedBoost > 0 ? 24 : 10;
+      ctx.fillStyle = bot.color;
+      ctx.beginPath();
+      ctx.roundRect(-bot.r, -bot.r, bot.r * 2, bot.r * 2, 8);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = "rgba(17, 19, 24, 0.74)";
+      ctx.fillRect(-bot.r * 0.62, -bot.r * 0.42, bot.r * 1.24, bot.r * 0.38);
+      ctx.fillStyle = "#f4f0e8";
+      ctx.fillRect(bot.r * 0.2, -bot.r * 0.33, bot.r * 0.26, bot.r * 0.2);
+      ctx.fillRect(-bot.r * 0.46, -bot.r * 0.33, bot.r * 0.26, bot.r * 0.2);
+
+      ctx.restore();
+
+    }
+
+    function drawSparks() {
+      for (const spark of sparks) {
+        ctx.globalAlpha = clamp(spark.life / spark.maxLife, 0, 1);
+        ctx.fillStyle = spark.color;
+        ctx.beginPath();
+        ctx.arc(spark.x, spark.y, spark.size, 0, TAU);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function draw() {
+      drawArena();
+      powers.forEach(drawPower);
+      bots.forEach(drawBot);
+      drawSparks();
+    }
+
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
+      return `${mins}:${secs}`;
+    }
+
+    function updateHud() {
+      const alive = bots.filter((bot) => bot.alive).length;
+      aliveCount.textContent = alive;
+      roundTime.textContent = formatTime(elapsed);
+      powerCount.textContent = powers.length;
+      botList.innerHTML = bots.map((bot) => `
+        <div class="bot-card ${bot.alive ? "" : "eliminated"}">
+          <span class="swatch" style="background: ${bot.color};"></span>
+          <span class="bot-name">${bot.name}</span>
+        </div>
+      `).join("");
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      const cssW = rect.width;
+      const cssH = rect.height;
+      const arenaSide = Math.max(280, Math.min(cssW - 120, cssH - 120));
+      arena.w = arenaSide;
+      arena.h = arenaSide;
+      arena.x = (cssW - arena.w) / 2;
+      arena.y = (cssH - arena.h) / 2 + 6;
+    }
+
+    function loop(now) {
+      const dt = Math.min(0.032, (now - lastTime) / 1000);
+      lastTime = now;
+      if (started && !paused) update(dt);
+      draw();
+      updateHud();
+      requestAnimationFrame(loop);
+    }
+
+    pauseBtn.addEventListener("click", () => {
+      if (!started || matchOver) return;
+      paused = !paused;
+      pauseBtn.textContent = paused ? "Resume" : "Pause";
+      banner.style.display = paused ? "block" : banner.style.display;
+      if (paused) {
+        banner.querySelector("strong").textContent = "Simulation paused.";
+        banner.querySelector("span").textContent = "Resume when you are ready for more collisions.";
+      } else if (!matchOver) {
+        banner.querySelector("strong").textContent = "Combat resumed.";
+        banner.querySelector("span").textContent = "The robots are back to hunting each other.";
+      }
+    });
+
+    startBtn.addEventListener("click", startMatch);
+    restartBtn.addEventListener("click", resetMatch);
+    winnerRestartBtn.addEventListener("click", resetMatch);
+    window.addEventListener("keydown", (event) => {
+      if (started || matchOver) return;
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        startMatch();
+      }
+    });
+    window.addEventListener("resize", () => {
+      resizeCanvas();
+      for (const bot of bots) {
+        bot.x = clamp(bot.x, arena.x + bot.r + 10, arena.x + arena.w - bot.r - 10);
+        bot.y = clamp(bot.y, arena.y + bot.r + 10, arena.y + arena.h - bot.r - 10);
+      }
+    });
+
+    if (!CanvasRenderingContext2D.prototype.roundRect) {
+      CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+        const radius = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+        this.beginPath();
+        this.moveTo(x + radius, y);
+        this.arcTo(x + w, y, x + w, y + h, radius);
+        this.arcTo(x + w, y + h, x, y + h, radius);
+        this.arcTo(x, y + h, x, y, radius);
+        this.arcTo(x, y, x + w, y, radius);
+        this.closePath();
+      };
+    }
+
+    resizeCanvas();
+    resetMatch();
+    requestAnimationFrame((time) => {
+      lastTime = time;
+      requestAnimationFrame(loop);
+    });
+  </script>
+</body>
+
+</html>
