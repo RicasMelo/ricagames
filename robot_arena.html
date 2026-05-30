@@ -524,6 +524,8 @@
       masterVolume: 0.28
     };
     const movementTuning = {
+      // Higher = more slide, lower = more grip.
+      frictionPerFrame: 0.99,
       burstForceMultiplier: 3.05,
       burstDurationMin: 0.11,
       burstDurationMax: 0.21,
@@ -1176,8 +1178,8 @@
         if (bot.frozen > 0) continue;
         bot.x += bot.vx * dt;
         bot.y += bot.vy * dt;
-        bot.vx *= Math.pow(0.994, dt * 60);
-        bot.vy *= Math.pow(0.994, dt * 60);
+        bot.vx *= Math.pow(movementTuning.frictionPerFrame, dt * 60);
+        bot.vy *= Math.pow(movementTuning.frictionPerFrame, dt * 60);
         bot.angle += (bot.vx * 0.008 + bot.spin) * dt;
       }
 
