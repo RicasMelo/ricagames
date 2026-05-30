@@ -330,7 +330,7 @@
 
     <section class="layout">
       <div class="arena-wrap">
-        <div class="arena-stats" aria-label="Robot sizes">
+        <div class="arena-stats" aria-label="Robot scores">
           <div class="stat robot-stat ember" id="emberStat">
             <span>Ember</span>
             <strong id="redSize">0</strong>
@@ -352,7 +352,8 @@
           <div class="modal-card">
             <p class="eyebrow">Claim The Crown</p>
             <h2>Robot King</h2>
-            <p>Three robots charge the hill in bursts. Hold the center, grow bigger, and shove rivals away.</p>
+            <p>Three robots charge the hill in bursts. Hold the center and score the most points before time runs out.
+            </p>
             <button id="startBtn" type="button" autofocus>Start</button>
           </div>
         </div>
@@ -360,7 +361,7 @@
           <div class="modal-card">
             <p class="eyebrow">Winner</p>
             <h2 id="resultTitle">Red wins</h2>
-            <p id="resultText">The last robot standing claimed the hill.</p>
+            <p id="resultText">The highest score claimed the hill.</p>
             <button id="endRestartBtn" type="button">Restart</button>
           </div>
         </div>
@@ -369,8 +370,8 @@
       <aside class="side">
         <section class="panel score">
           <div class="stat">
-            <span>Alive</span>
-            <strong id="aliveCount">3</strong>
+            <span>Round</span>
+            <strong id="roundLength">15s</strong>
           </div>
           <div class="stat">
             <span>Time</span>
@@ -382,10 +383,9 @@
           <p class="eyebrow">Rules</p>
           <div class="rule-list">
             <div class="rule-row">Robots charge toward the middle in short bursts.</div>
-            <div class="rule-row">Robots inside the hill slowly grow over time.</div>
+            <div class="rule-row">Robots inside the hill score points over time.</div>
             <div class="rule-row">Robots holding the hill push rivals outward.</div>
-            <div class="rule-row">Robots that hit the arena limits are destroyed.</div>
-            <div class="rule-row">The last robot standing wins.</div>
+            <div class="rule-row">The highest score after 15 seconds wins.</div>
           </div>
         </section>
 
@@ -418,7 +418,7 @@
       document.getElementById("limeStat"),
       document.getElementById("violetStat")
     ];
-    const aliveCount = document.getElementById("aliveCount");
+    const roundLength = document.getElementById("roundLength");
     const roundTime = document.getElementById("roundTime");
     const feed = document.getElementById("feed");
 
@@ -433,16 +433,18 @@
 
     const tuning = {
       startRadius: 22,
+      roundDuration: 25,
       hillRadius: 86,
-      growRate: 3.9,
-      baseFriction: 0.5,
+      pointsPerSecond: 10,
+      baseFriction: 0.8,
       idleHillFriction: 0.972,
+      middleIdleFriction: 0.82,
       idleHillReturnForce: 150,
-      burstForce: 7000,
+      burstForce: 10000,
       burstCooldownMin: 0.5,
       burstCooldownMax: 2.68,
-      burstDurationMin: 0.09,
-      burstDurationMax: 0.09,
+      burstDurationMin: 0.2,
+      burstDurationMax: 0.2,
       maxSpeed: 390,
       sizeMaxSpeedPower: 0.018,
       hillPushForce: 185,
@@ -590,10 +592,11 @@
           burstCooldown: rand(0.08, 0.38),
           burstTimer: 0,
           burstAngle: def.angle + Math.PI,
-          growPing: 0
+          score: 0,
+          scorePing: 0
         };
       });
-      addFeed("Three robots enter. One hill, one crown.");
+      addFeed("Three robots enter. Fifteen seconds for the crown.");
       updateHud();
     }
 
@@ -660,15 +663,34 @@
     }
 
     function chooseBurstTarget(robot) {
+      if (isInsideHill(robot)) {
+        const rivalsInHill = robots.filter((other) => other !== robot && isInsideHill(other));
+        if (!rivalsInHill.length) return null;
+        let nearest = null;
+        let nearestDistance = Infinity;
+        for (const other of rivalsInHill) {
+          const d = distance(robot, other);
+          if (d < nearestDistance) {
+            nearest = other;
+            nearestDistance = d;
+          }
+        }
+        return Math.atan2(nearest.y - robot.y, nearest.x - robot.x);
+      }
       return Math.atan2(hill.y - robot.y, hill.x - robot.x);
     }
 
     function updateRobot(robot, dt) {
-      robot.burstCooldown -= dt;
       const inHill = isInsideHill(robot);
       const rivalsInHill = robots.filter((other) => other !== robot && isInsideHill(other));
 
-      if (robot.burstCooldown <= 0) {
+      if (inHill && !rivalsInHill.length) {
+        robot.burstTimer = 0;
+      } else {
+        robot.burstCooldown -= dt;
+      }
+
+      if ((!inHill || rivalsInHill.length) && robot.burstCooldown <= 0) {
         const targetAngle = chooseBurstTarget(robot);
         robot.burstCooldown = rand(tuning.burstCooldownMin, tuning.burstCooldownMax);
         if (targetAngle !== null) {
@@ -687,34 +709,16 @@
       }
 
       if (inHill) {
-        const oldRadius = robot.r;
-        robot.r += tuning.growRate * dt;
-        robot.growPing += robot.r - oldRadius;
-        if (robot.growPing > 0.9) {
-          robot.growPing = 0;
+        const gained = tuning.pointsPerSecond * dt;
+        robot.score += gained;
+        robot.scorePing += gained;
+        if (robot.scorePing > 5) {
+          robot.scorePing = 0;
           burst(robot.x, robot.y, robot.color, 4);
-          sounds.grow();
-        }
-        for (const other of rivalsInHill) {
-          const dx = other.x - robot.x;
-          const dy = other.y - robot.y;
-          const d = Math.hypot(dx, dy) || 1;
-          if (d < hill.r + other.r) {
-            const pushResistance = resistanceFor(other);
-            other.vx += (dx / d) * tuning.hillPushForce * dt * pushResistance;
-            other.vy += (dy / d) * tuning.hillPushForce * dt * pushResistance;
-          }
         }
         if (!rivalsInHill.length) {
-          const dx = hill.x - robot.x;
-          const dy = hill.y - robot.y;
-          const d = Math.hypot(dx, dy) || 1;
-          if (d > robot.r * 0.35) {
-            robot.vx += (dx / d) * tuning.idleHillReturnForce * dt;
-            robot.vy += (dy / d) * tuning.idleHillReturnForce * dt;
-          }
-          robot.vx *= tuning.idleHillFriction;
-          robot.vy *= tuning.idleHillFriction;
+          robot.vx *= tuning.middleIdleFriction;
+          robot.vy *= tuning.middleIdleFriction;
         }
       }
 
@@ -737,17 +741,17 @@
       const dx = robot.x - arena.x;
       const dy = robot.y - arena.y;
       const d = Math.hypot(dx, dy) || 1;
-      if (d <= arena.r - robot.r) return;
-      destroyRobot(robot);
-    }
-
-    function destroyRobot(robot) {
-      if (!robots.includes(robot)) return;
-      burst(robot.x, robot.y, robot.color, 42);
-      sounds.explode();
-      addFeed(`${robot.name} hit the arena limits and was destroyed.`);
-      robots = robots.filter((candidate) => candidate !== robot);
-      updateHud();
+      const maxDistance = arena.r - robot.r;
+      if (d <= maxDistance) return;
+      const nx = dx / d;
+      const ny = dy / d;
+      robot.x = arena.x + nx * maxDistance;
+      robot.y = arena.y + ny * maxDistance;
+      const impact = robot.vx * nx + robot.vy * ny;
+      if (impact > 0) {
+        robot.vx -= impact * nx * 1.55;
+        robot.vy -= impact * ny * 1.55;
+      }
     }
 
     function resistanceFor(robot) {
@@ -794,17 +798,19 @@
     }
 
     function checkWinner() {
-      if (robots.length > 1) return;
+      if (elapsed < tuning.roundDuration) return;
       matchOver = true;
       paused = true;
-      const winner = robots[0];
-      resultTitle.textContent = winner ? `${winner.name} wins` : "No winner";
-      resultText.textContent = winner
-        ? `${winner.name} is the last robot standing.`
-        : "Every robot was destroyed at the arena limits.";
+      const highScore = Math.max(...robots.map((robot) => robot.score));
+      const winners = robots.filter((robot) => Math.abs(robot.score - highScore) < 0.001);
+      const names = winners.map((robot) => robot.name).join(" and ");
+      resultTitle.textContent = winners.length > 1 ? `${names} win` : `${names} wins`;
+      resultText.textContent = winners.length > 1
+        ? `They tied with ${Math.round(highScore)} points.`
+        : `${names} held the hill longest with ${Math.round(highScore)} points.`;
       endPanel.classList.remove("hidden");
-      addFeed(winner ? `${winner.name} claimed the crown.` : "The arena claimed them all.");
-      burst(hill.x, hill.y, winner ? winner.color : "#f4f0e8", 46);
+      addFeed(`${names} claimed the crown.`);
+      burst(hill.x, hill.y, winners[0].color, 46);
       sounds.win();
     }
 
@@ -843,7 +849,7 @@
     function update(dt) {
       if (countdownActive) updateCountdown(dt);
       if (!started || paused || matchOver || countdownActive) return;
-      elapsed += dt;
+      elapsed = Math.min(tuning.roundDuration, elapsed + dt);
       for (const robot of robots) updateRobot(robot, dt);
       resolveCollisions();
       updateParticles(dt);
@@ -987,15 +993,15 @@
 
     function updateHud() {
       const byId = new Map(robots.map((robot) => [robot.id, robot]));
-      redSize.textContent = byId.has(0) ? Math.round(byId.get(0).r) : "OUT";
-      greenSize.textContent = byId.has(1) ? Math.round(byId.get(1).r) : "OUT";
-      blueSize.textContent = byId.has(2) ? Math.round(byId.get(2).r) : "OUT";
-      const leader = robots.reduce((biggest, robot) => (!biggest || robot.r > biggest.r ? robot : biggest), null);
+      redSize.textContent = byId.has(0) ? Math.round(byId.get(0).score) : "0";
+      greenSize.textContent = byId.has(1) ? Math.round(byId.get(1).score) : "0";
+      blueSize.textContent = byId.has(2) ? Math.round(byId.get(2).score) : "0";
+      const leader = robots.reduce((best, robot) => (!best || robot.score > best.score ? robot : best), null);
       robotStatEls.forEach((el, index) => {
-        el.classList.toggle("leader", Boolean(leader && leader.id === index));
+        el.classList.toggle("leader", Boolean(leader && leader.id === index && leader.score > 0));
       });
-      aliveCount.textContent = robots.length;
-      roundTime.textContent = formatTime(elapsed);
+      roundLength.textContent = `${tuning.roundDuration}s`;
+      roundTime.textContent = formatTime(tuning.roundDuration - elapsed);
     }
 
     function resize() {
