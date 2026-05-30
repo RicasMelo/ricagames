@@ -104,6 +104,23 @@
       box-shadow: 0 22px 70px rgba(0, 0, 0, 0.34);
     }
 
+    .arena-stats {
+      position: absolute;
+      left: 18px;
+      top: 18px;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(74px, auto));
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .arena-stats .stat {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(23, 27, 33, 0.8);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+    }
+
     canvas {
       display: block;
       width: 100%;
@@ -123,6 +140,27 @@
 
     .overlay.hidden {
       display: none;
+    }
+
+    .countdown-panel {
+      position: absolute;
+      inset: 0;
+      display: none;
+      place-items: center;
+      pointer-events: none;
+      text-align: center;
+    }
+
+    .countdown-panel.show {
+      display: grid;
+    }
+
+    .countdown-message {
+      color: var(--text);
+      font-size: 1.6rem;
+      font-weight: 900;
+      line-height: 1.05;
+      text-shadow: 0 0 18px rgba(0, 0, 0, 0.9), 0 0 24px rgba(245, 196, 81, 0.72);
     }
 
     .modal-card {
@@ -247,7 +285,20 @@
 
     <section class="layout">
       <div class="arena-wrap">
+        <div class="arena-stats" aria-label="Robot counters">
+          <div class="stat">
+            <span>Eaten</span>
+            <strong id="eatenCount">0</strong>
+          </div>
+          <div class="stat">
+            <span>Small</span>
+            <strong id="smallCount">2</strong>
+          </div>
+        </div>
         <canvas id="arena" width="900" height="700" aria-label="Robot Feast circular arena"></canvas>
+        <div class="countdown-panel" id="countdownPanel">
+          <div class="countdown-message" id="countdownMessage">Guess how many robots will be eaten</div>
+        </div>
         <div class="overlay" id="startPanel">
           <div class="modal-card">
             <p class="eyebrow">Ready</p>
@@ -267,17 +318,6 @@
       </div>
 
       <aside class="side">
-        <section class="panel score">
-          <div class="stat">
-            <span>Eaten</span>
-            <strong id="eatenCount">0</strong>
-          </div>
-          <div class="stat">
-            <span>Small</span>
-            <strong id="smallCount">2</strong>
-          </div>
-        </section>
-
         <section class="panel score">
           <div class="stat">
             <span>Big Size</span>
@@ -310,6 +350,8 @@
   <script>
     const canvas = document.getElementById("arena");
     const ctx = canvas.getContext("2d");
+    const countdownPanel = document.getElementById("countdownPanel");
+    const countdownMessage = document.getElementById("countdownMessage");
     const startPanel = document.getElementById("startPanel");
     const endPanel = document.getElementById("endPanel");
     const resultTitle = document.getElementById("resultTitle");
@@ -332,6 +374,9 @@
     const spriteFrameW = 24;
     const spriteFrameH = 16;
     const smallSpriteScale = 3.2;
+    const smallRobotColor = "#f28f45";
+    const smallRobotHighlight = "#ffe0a3";
+    const smallRobotShadow = "#4b1d12";
     const tuning = {
       initialSmallRobots: 2,
       smallRadius: 14,
@@ -341,6 +386,10 @@
       smallSplitCooldown: 0.42,
       smallSpeed: 128,
       bigSpeed: 118
+    };
+    const soundTuning = {
+      enabled: true,
+      masterVolume: 0.26
     };
 
     let bigRobot;
@@ -352,7 +401,11 @@
     let started = false;
     let paused = true;
     let matchOver = false;
+    let countdownActive = false;
+    let countdownTimer = 0;
+    let countdownStep = "";
     let lastTime = performance.now();
+    let audioContext = null;
     const tintedSmallSprites = new Map();
 
     function rand(min, max) {
@@ -373,6 +426,81 @@
       feed.innerHTML = messages.map((message) => `<p>${message}</p>`).join("");
     }
 
+    function ensureAudio() {
+      if (!soundTuning.enabled) return null;
+      if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioContext.state === "suspended") audioContext.resume();
+      return audioContext;
+    }
+
+    function tone({ frequency = 220, endFrequency = frequency, duration = 0.15, type = "square", volume = 0.35, delay = 0 }) {
+      const audio = ensureAudio();
+      if (!audio) return;
+      const now = audio.currentTime + delay;
+      const oscillator = audio.createOscillator();
+      const gain = audio.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(frequency, now);
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), now + duration);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(volume * soundTuning.masterVolume, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      oscillator.connect(gain);
+      gain.connect(audio.destination);
+      oscillator.start(now);
+      oscillator.stop(now + duration + 0.02);
+    }
+
+    function noise({ duration = 0.18, volume = 0.3, lowpass = 800 }) {
+      const audio = ensureAudio();
+      if (!audio) return;
+      const now = audio.currentTime;
+      const buffer = audio.createBuffer(1, audio.sampleRate * duration, audio.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const source = audio.createBufferSource();
+      const filter = audio.createBiquadFilter();
+      const gain = audio.createGain();
+      source.buffer = buffer;
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(lowpass, now);
+      gain.gain.setValueAtTime(volume * soundTuning.masterVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      source.connect(filter);
+      filter.connect(gain);
+      gain.connect(audio.destination);
+      source.start(now);
+      source.stop(now + duration);
+    }
+
+    const sounds = {
+      start() {
+        tone({ frequency: 180, endFrequency: 420, duration: 0.14, type: "sawtooth", volume: 0.35 });
+        tone({ frequency: 420, endFrequency: 720, duration: 0.14, type: "triangle", volume: 0.28, delay: 0.12 });
+      },
+      countdown(step) {
+        if (step === "GO") {
+          tone({ frequency: 520, endFrequency: 980, duration: 0.2, type: "sawtooth", volume: 0.42 });
+          return;
+        }
+        tone({ frequency: 420, endFrequency: 300, duration: 0.12, type: "square", volume: 0.32 });
+      },
+      split() {
+        tone({ frequency: 360, endFrequency: 650, duration: 0.12, type: "triangle", volume: 0.24 });
+      },
+      eat() {
+        noise({ duration: 0.16, volume: 0.35, lowpass: 700 });
+        tone({ frequency: 150, endFrequency: 70, duration: 0.18, type: "sawtooth", volume: 0.34 });
+      },
+      finish() {
+        tone({ frequency: 260, endFrequency: 390, duration: 0.18, type: "triangle", volume: 0.32 });
+        tone({ frequency: 390, endFrequency: 620, duration: 0.22, type: "triangle", volume: 0.32, delay: 0.16 });
+        tone({ frequency: 620, endFrequency: 930, duration: 0.28, type: "triangle", volume: 0.34, delay: 0.34 });
+      }
+    };
+
     function hexToRgb(hex) {
       const value = hex.replace("#", "");
       return {
@@ -382,7 +510,7 @@
       };
     }
 
-    function getTintedSmallSprite(color = "#48d5d9") {
+    function getTintedSmallSprite(color = smallRobotColor) {
       if (!robotSprite.complete || robotSprite.naturalWidth === 0) return null;
       if (tintedSmallSprites.has(color)) return tintedSmallSprites.get(color);
 
@@ -394,13 +522,19 @@
       const imageData = spriteCtx.getImageData(0, 0, spriteCanvas.width, spriteCanvas.height);
       const data = imageData.data;
       const tint = hexToRgb(color);
-      const dark = { r: 17, g: 19, b: 24 };
+      const highlight = hexToRgb(smallRobotHighlight);
+      const dark = hexToRgb(smallRobotShadow);
       for (let i = 0; i < data.length; i += 4) {
         if (data[i + 3] === 0) continue;
         const shade = Math.max(0, Math.min(1, (data[i] + data[i + 1] + data[i + 2]) / (255 * 3)));
-        data[i] = dark.r + (tint.r - dark.r) * shade;
-        data[i + 1] = dark.g + (tint.g - dark.g) * shade;
-        data[i + 2] = dark.b + (tint.b - dark.b) * shade;
+        const mid = Math.min(1, shade * 1.45);
+        const high = Math.max(0, (shade - 0.68) / 0.32);
+        const baseR = dark.r + (tint.r - dark.r) * mid;
+        const baseG = dark.g + (tint.g - dark.g) * mid;
+        const baseB = dark.b + (tint.b - dark.b) * mid;
+        data[i] = baseR + (highlight.r - baseR) * high;
+        data[i + 1] = baseG + (highlight.g - baseG) * high;
+        data[i + 2] = baseB + (highlight.b - baseB) * high;
       }
       spriteCtx.putImageData(imageData, 0, 0);
       tintedSmallSprites.set(color, spriteCanvas);
@@ -454,7 +588,11 @@
       started = false;
       paused = true;
       matchOver = false;
+      countdownActive = false;
+      countdownTimer = 0;
+      countdownStep = "";
       startPanel.classList.remove("hidden");
+      countdownPanel.classList.remove("show");
       endPanel.classList.add("hidden");
       pauseBtn.textContent = "Pause";
       pauseBtn.disabled = true;
@@ -466,10 +604,46 @@
     function startGame() {
       if (started || matchOver) return;
       started = true;
-      paused = false;
-      pauseBtn.disabled = false;
+      paused = true;
+      countdownActive = true;
+      countdownTimer = 5.8;
+      countdownStep = "";
+      pauseBtn.disabled = true;
       startPanel.classList.add("hidden");
-      addFeed("The big robot starts hunting.");
+      countdownPanel.classList.add("show");
+      countdownMessage.textContent = "Guess how many robots will be eaten";
+      sounds.start();
+    }
+
+    function updateCountdown(dt) {
+      if (!countdownActive) return;
+      countdownTimer = Math.max(0, countdownTimer - dt);
+
+      let nextStep = "";
+      if (countdownTimer > 3.8) {
+        nextStep = "guess";
+      } else if (countdownTimer > 2.8) {
+        nextStep = "3";
+      } else if (countdownTimer > 1.8) {
+        nextStep = "2";
+      } else if (countdownTimer > 0.8) {
+        nextStep = "1";
+      } else if (countdownTimer > 0) {
+        nextStep = "GO";
+      } else {
+        countdownActive = false;
+        paused = false;
+        pauseBtn.disabled = false;
+        countdownPanel.classList.remove("show");
+        addFeed("The big robot starts hunting.");
+        return;
+      }
+
+      if (nextStep !== countdownStep) {
+        countdownStep = nextStep;
+        countdownMessage.textContent = nextStep === "guess" ? "Guess how many robots will be eaten" : nextStep;
+        if (["3", "2", "1", "GO"].includes(nextStep)) sounds.countdown(nextStep);
+      }
     }
 
     function burst(x, y, color, count = 18) {
@@ -540,7 +714,8 @@
       );
       clone.splitCooldown = tuning.smallSplitCooldown;
       smallRobots.push(clone);
-      burst(robot.x, robot.y, "#48d5d9", 8);
+      burst(robot.x, robot.y, smallRobotColor, 8);
+      sounds.split();
       addFeed(`A small robot split. ${smallRobots.length} remain.`);
     }
 
@@ -553,24 +728,7 @@
     }
 
     function updateBigRobot(dt) {
-      let target = null;
-      let best = Infinity;
-      for (const small of smallRobots) {
-        const d = dist(bigRobot, small);
-        if (d < best) {
-          best = d;
-          target = small;
-        }
-      }
-
-      if (target) {
-        const angle = Math.atan2(target.y - bigRobot.y, target.x - bigRobot.x);
-        bigRobot.vx += Math.cos(angle) * tuning.bigSpeed * 1.15 * dt;
-        bigRobot.vy += Math.sin(angle) * tuning.bigSpeed * 1.15 * dt;
-        bigRobot.wander = angle;
-      }
-
-      steerRobot(bigRobot, dt, tuning.bigSpeed, 0.16);
+      steerRobot(bigRobot, dt, tuning.bigSpeed, 0.22);
       keepInsideCircle(bigRobot);
     }
 
@@ -582,6 +740,7 @@
         eaten += 1;
         bigRobot.r += tuning.bigGrowthPerEat;
         burst(small.x, small.y, "#f5c451", 24);
+        sounds.eat();
         addFeed(`Big robot ate one. Total: ${eaten}.`);
       }
     }
@@ -606,6 +765,7 @@
       resultText.textContent = `The big robot consumed ${eaten} small robots.`;
       endPanel.classList.remove("hidden");
       addFeed(`Feast complete: ${eaten} eaten.`);
+      sounds.finish();
     }
 
     function update(dt) {
@@ -670,7 +830,7 @@
       ctx.save();
       ctx.translate(robot.x, robot.y);
       ctx.rotate(robot.angle);
-      ctx.shadowColor = "#48d5d9";
+      ctx.shadowColor = smallRobotColor;
       ctx.shadowBlur = 10;
       const sprite = getTintedSmallSprite();
       if (sprite) {
@@ -681,7 +841,7 @@
         ctx.drawImage(sprite, frame * spriteFrameW, 0, spriteFrameW, spriteFrameH, -spriteW / 2, -spriteH / 2, spriteW, spriteH);
         ctx.imageSmoothingEnabled = true;
       } else {
-        ctx.fillStyle = "#48d5d9";
+        ctx.fillStyle = smallRobotColor;
         ctx.beginPath();
         ctx.arc(0, 0, robot.r, 0, TAU);
         ctx.fill();
@@ -782,6 +942,7 @@
     function loop(now) {
       const dt = Math.min(0.032, (now - lastTime) / 1000);
       lastTime = now;
+      if (countdownActive) updateCountdown(dt);
       if (started && !paused) update(dt);
       draw();
       updateHud();
@@ -792,7 +953,7 @@
     restartBtn.addEventListener("click", resetGame);
     endRestartBtn.addEventListener("click", resetGame);
     pauseBtn.addEventListener("click", () => {
-      if (!started || matchOver) return;
+      if (!started || matchOver || countdownActive) return;
       paused = !paused;
       pauseBtn.textContent = paused ? "Resume" : "Pause";
     });
